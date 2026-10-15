@@ -5,7 +5,9 @@ import { join, sep } from 'node:path';
 import { createJudgeEvidence, sameFileIdentity } from './judge-evidence.mjs';
 
 async function fixture(content = 'first line\nsecond line\nthird line\n') {
-  const root = await mkdtemp(join(import.meta.dirname, '.cache', 'hve-judge-evidence-'));
+  const cache = join(import.meta.dirname, '.cache');
+  await mkdir(cache, { recursive: true });
+  const root = await mkdtemp(join(cache, 'hve-judge-evidence-'));
   const workingDirectory = join(root, 'workspace');
   const evidenceDirectory = join(workingDirectory, 'evidence');
   const file = join(evidenceDirectory, 'sample.txt');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDefaultGraderRegistry, gradeTrajectory } from '@microsoft/vally';
@@ -136,6 +136,7 @@ test('Vally prompt and panel graders use their original rubric prompt, schema, a
     [{ call: true, evidenceTools: ['view', 'grep'], arguments: validGrade() }],
   ]);
   const repoCache = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.cache');
+  await mkdir(repoCache, { recursive: true });
   const workDir = await mkdtemp(join(repoCache, 'hve-vally-judge-contract-'));
   const priorTempEnvironment = Object.fromEntries(['TEMP', 'TMP', 'TMPDIR']
     .map(name => [name, process.env[name]]));
