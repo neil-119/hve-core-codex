@@ -19,6 +19,7 @@ lock_path="$repo_root/release/$channel/source-lock.json"
 manifest_path="$repo_root/release/$channel/release-manifest.json"
 checksums_path="$repo_root/release/$channel/checksums.txt"
 runtime_evidence_path="$repo_root/release/$channel/runtime-evidence.json"
+runtime_evidence_source_path="$repo_root/release/$channel/evidence-source.json"
 lock_fields="$RUNNER_TEMP/release-lock-$channel.txt"
 
 for path in "$lock_path" "$manifest_path" "$checksums_path"; do
@@ -29,6 +30,10 @@ for path in "$lock_path" "$manifest_path" "$checksums_path"; do
 done
 if [[ -L "$runtime_evidence_path" ]]; then
   echo "Reviewed runtime-evidence metadata must not be a symlink." >&2
+  exit 1
+fi
+if [[ -L "$runtime_evidence_source_path" ]]; then
+  echo "Reviewed runtime-evidence source metadata must not be a symlink." >&2
   exit 1
 fi
 
@@ -130,6 +135,26 @@ cp "$checksums_path" "$output/generated/checksums.txt"
 # so the unchanged strict gate remains fail-closed until they are supplied.
 if [[ -f "$runtime_evidence_path" ]]; then
   cp "$runtime_evidence_path" "$output/generated/runtime-evidence.json"
+fi
+# Restore only from an explicitly reviewed, same-repository artifact or release
+# asset. Missing source metadata leaves raw evidence absent, so the strict gate
+# below continues to fail closed.
+if [[ -e "$runtime_evidence_source_path" ]]; then
+  if [[ ! -f "$runtime_evidence_source_path" ]]; then
+    echo "Reviewed runtime-evidence source metadata must be a regular file." >&2
+    exit 1
+  fi
+  if [[ ! -f "$output/generated/runtime-evidence.json" ]]; then
+    echo "Reviewed runtime-evidence source metadata requires a runtime-evidence envelope." >&2
+    exit 1
+  fi
+  PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}" uv run --project "$repo_root" --locked python -m hve_codex_porter.release_evidence \
+    --source "$runtime_evidence_source_path" \
+    --candidate "$output" \
+    --repository "${GITHUB_REPOSITORY:-}" \
+    --receipt "$RUNNER_TEMP/release-evidence-delivery-$channel-${GITHUB_RUN_ID:-local}.json"
+else
+  echo "No reviewed runtime-evidence source is configured; raw evidence remains absent and release gates stay fail-closed."
 fi
 printf '%s\n' "$builder_dir" > "$RUNNER_TEMP/hve-release-builder-$channel.txt"
 printf '%s\n' "$repo_root/release/$channel/source-lock.json" > "$RUNNER_TEMP/hve-release-lock-$channel.txt"

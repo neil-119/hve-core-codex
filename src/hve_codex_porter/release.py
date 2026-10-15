@@ -877,13 +877,17 @@ def validate_runtime_evidence(
     scenario_definition_sha256: str,
     output_hashes: Mapping[str, str],
     vally_verification: Mapping[str, Any] | None = None,
+    behavior_acceptance: Mapping[str, Any] | None = None,
 ) -> list[str]:
     blockers: list[str] = []
     if channel != "stable":
         return blockers
     if evidence.get("schema_version") != 2:
         blockers.append("runtime evidence must use acceptance contract version 2")
-    if not vally_verification or vally_verification.get("verified") is not True:
+    historical_accepted = bool(behavior_acceptance and behavior_acceptance.get("accepted") is True)
+    required_scenarios = tuple(item for item in RUNTIME_SCENARIOS
+                               if not historical_accepted or item != "child-read-only-permission")
+    if not historical_accepted and (not vally_verification or vally_verification.get("verified") is not True):
         blockers.append("runtime evidence requires independent file-backed full-suite Vally verification")
     if evidence.get("explicitly_invoked") is not True:
         blockers.append("runtime evaluation was not explicitly invoked")
@@ -960,9 +964,10 @@ def validate_runtime_evidence(
         reviewed_scenarios = human_review.get("scenario_ids")
         if (
             not isinstance(reviewed_scenarios, list)
-            or len(reviewed_scenarios) != len(RUNTIME_SCENARIOS)
             or any(not isinstance(item, str) for item in reviewed_scenarios)
-            or set(reviewed_scenarios) != set(RUNTIME_SCENARIOS)
+            or len(reviewed_scenarios) != len(set(reviewed_scenarios))
+            or set(reviewed_scenarios) - set(RUNTIME_SCENARIOS)
+            or (set(reviewed_scenarios) - ({"child-read-only-permission"} if historical_accepted else set())) != set(required_scenarios)
         ):
             blockers.append(f"runtime evidence {surface.upper()} human review must attest every required host check")
         if human_review.get("scenario_definition_sha256") != scenario_definition_sha256:
@@ -982,13 +987,13 @@ def validate_runtime_evidence(
         if scenario_id in by_id:
             blockers.append(f"runtime evidence contains a duplicate scenario: {scenario_id}")
         by_id[scenario_id] = item
-    missing = [scenario for scenario in RUNTIME_SCENARIOS if scenario not in by_id]
+    missing = [scenario for scenario in required_scenarios if scenario not in by_id]
     if missing:
         blockers.append("runtime evidence is missing scenarios: " + ", ".join(missing))
     for surface in RUNTIME_SURFACES:
         failed = [
             scenario
-            for scenario in RUNTIME_SCENARIOS
+            for scenario in required_scenarios
             if scenario in by_id
             and (not isinstance(by_id[scenario].get("surfaces"), dict)
                  or by_id[scenario]["surfaces"].get(surface) != "passed")
@@ -1018,6 +1023,7 @@ def publication_eligibility(
     merged_commit: str | None = None,
     protected_branch: bool = False,
     vally_verification: Mapping[str, Any] | None = None,
+    behavior_acceptance: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compute an explicit channel policy result without performing publication."""
     channel = _validate_channel(channel)
@@ -1064,6 +1070,7 @@ def publication_eligibility(
                     scenario_definition_sha256=scenario_definition_sha256 or "",
                     output_hashes=output_hashes,
                     vally_verification=vally_verification,
+                    behavior_acceptance=behavior_acceptance,
                 )
             )
         if not merged_commit:
@@ -1378,7 +1385,21 @@ def _cmd_eligibility(args: argparse.Namespace) -> dict[str, Any]:
     if args.channel == "stable" and manifest.get("runtime_evidence_sha256") != evidence_sha:
         hash_blockers.append("release manifest runtime evidence hash does not match the supplied evidence file")
     vally_verification = None
-    if args.channel == "stable" and evidence is not None:
+    behavior_acceptance = None
+    acceptance_policy = getattr(args, "acceptance_policy", None)
+    if acceptance_policy is not None:
+        from .release_acceptance import verify_reviewed_acceptance
+        from .common import PortError
+        if args.channel != "stable" or evidence is None:
+            hash_blockers.append("Reviewed acceptance requires stable candidate runtime evidence")
+        else:
+            try:
+                behavior_acceptance = verify_reviewed_acceptance(
+                    Path(acceptance_policy), Path(__file__).resolve().parents[2], evidence,
+                )
+            except (PortError, OSError, ValueError) as exc:
+                hash_blockers.append(str(exc))
+    if args.channel == "stable" and evidence is not None and acceptance_policy is None:
         from .runtime_evidence import verify_candidate_vally
         approved_adapter = Path(__file__).resolve().parents[2] / "vally-executor"
         if not approved_adapter.is_dir():
@@ -1405,7 +1426,10 @@ def _cmd_eligibility(args: argparse.Namespace) -> dict[str, Any]:
         merged_commit=args.merged_commit,
         protected_branch=args.protected_branch,
         vally_verification=vally_verification,
+        behavior_acceptance=behavior_acceptance,
     )
+    if behavior_acceptance is not None:
+        decision["behavior_acceptance"] = behavior_acceptance
     decision["blockers"].extend(hash_blockers)
     if hash_blockers:
         decision["eligible"] = False
@@ -1878,6 +1902,7 @@ def add_release_parser(subparsers: Any) -> argparse.ArgumentParser:
     eligibility.add_argument("--compatibility-report", type=Path, required=True)
     eligibility.add_argument("--release-manifest", type=Path, required=True)
     eligibility.add_argument("--runtime-evidence", type=Path)
+    eligibility.add_argument("--acceptance-policy", type=Path, help="Explicit reviewed historical behavioral acceptance; candidate host evidence remains required")
     eligibility.add_argument("--upstream-prerelease", action="store_true")
     eligibility.add_argument("--opt-in", action="store_true")
     eligibility.add_argument("--merged-commit")

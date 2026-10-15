@@ -38,6 +38,13 @@ def test_weekly_schedule_checks_stable_and_edge_only():
     }
     assert weekly["jobs"]["publish-stable"]["needs"] == "sync-stable"
     assert weekly["jobs"]["publish-edge"]["needs"] == "sync-edge"
+    assert weekly["permissions"] == {"actions": "read", "contents": "read"}
+    for name in ("sync-stable", "sync-edge"):
+        assert weekly["jobs"][name]["permissions"] == {
+            "actions": "read", "contents": "write", "pull-requests": "write",
+        }
+    for name in ("publish-stable", "publish-edge"):
+        assert weekly["jobs"][name]["permissions"] == {"actions": "read", "contents": "write"}
     assert "schedule" not in sync["on"]
     assert "workflow_call" in sync["on"]
     assert sync["on"]["workflow_dispatch"]["inputs"]["channel"]["options"] == ["stable", "prerelease", "edge"]
@@ -80,16 +87,44 @@ def test_sync_builds_external_distribution_and_only_opens_metadata_pr():
     assert 'git add -- "release/$CHANNEL/source-lock.json" "release/$CHANNEL/release-manifest.json" "release/$CHANNEL/checksums.txt"' in commit_step["run"]
     assert "generated/" not in commit_step["run"]
     assert any(step.get("uses", "").startswith("actions/upload-artifact@") for step in build_steps)
+    assert sync["jobs"]["open-metadata-pr"]["permissions"] == {
+        "actions": "read", "contents": "write", "pull-requests": "write",
+    }
+    assert not any("create-github-app-token@" in step.get("uses", "") for step in pr_steps)
+    assert commit_step["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+    assert "GitHub will not automatically start other workflows" in commit_step["run"]
 
 
 def test_publisher_attaches_zip_and_verified_installer_assets():
-    publisher = _load_workflow("publish.yml")["jobs"]["publish-release"]
+    publish = _load_workflow("publish.yml")
+    publisher = publish["jobs"]["publish-release"]
     text = "\n".join(step.get("run", "") for step in publisher["steps"])
+    assert publisher["permissions"] == {"actions": "read", "contents": "write"}
+    assert "GPG" not in text
+    assert "git tag -s" not in text
+    assert "git verify-tag" not in text
+    assert not any("actions/attest@" in step.get("uses", "") for step in publisher["steps"])
     assert 'uv build --project "$builder_dir"' in text
     assert '"$RUNNER_TEMP/dist.zip"' in text
     assert '"$RUNNER_TEMP/dist.zip.sha256"' in text
     assert '"$RUNNER_TEMP/installer/"*.whl' in text
     assert '"$(basename "$wheel").sha256"' in text
+    release_step = next(step for step in publisher["steps"] if step.get("name", "").startswith("Create or verify the immutable unsigned tag"))
+    assert release_step["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+    assert "does not sign or notarize a desktop application" in release_step["run"]
+    assert "verify assets with the published checksums" in release_step["run"]
+    assert release_step["run"].index('git config user.name "github-actions[bot]"') < release_step["run"].index('git tag -a -m')
+    assert "create-github-app-token@" not in "\n".join(step.get("uses", "") for step in publisher["steps"])
+    rebuild = next(step for step in publish["jobs"]["release-gate"]["steps"] if step.get("name", "").startswith("Rebuild the exact reviewed"))
+    recheck = next(step for step in publisher["steps"] if step.get("id") == "recheck")
+    assert publish["jobs"]["release-gate"]["permissions"] == {"actions": "read", "contents": "read"}
+    assert rebuild["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+    assert rebuild["env"]["GITHUB_REPOSITORY"] == "${{ github.repository }}"
+    assert recheck["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+    assert recheck["env"]["GITHUB_REPOSITORY"] == "${{ github.repository }}"
+    gate = next(step for step in publish["jobs"]["release-gate"]["steps"] if step.get("name") == "Check branch, channel opt-in, and release eligibility")
+    assert '--acceptance-policy mappings/release-acceptance.json' in gate["run"]
+    assert '--acceptance-policy mappings/release-acceptance.json' in recheck["run"]
 
 
 def test_build_input_fingerprint_ignores_docs_and_unrelated_tests_but_tracks_converter_changes(tmp_path):
@@ -231,7 +266,10 @@ def test_sync_prs_are_manual_and_publish_rebuilds_under_strict_external_gate():
     assert 'GITHUB_OUTPUT="$selection" PYTHONPATH="$trusted/src" uv run --project "$PWD" --locked python "$trusted/preflight.py"' in recheck_script
     assert 'bash "$builder_dir/scripts/build.sh" --archive-only --output "$RUNNER_TEMP/dist"' in recheck_script
     assert '"$RUNNER_TEMP/dist.tar.gz"' in recheck_script
-    release_assets = next(step for step in recheck["steps"] if step.get("name") == "Create or verify the signed immutable tag and GitHub release")
+    release_assets = next(step for step in recheck["steps"] if step.get("name") == "Create or verify the immutable unsigned tag and GitHub release")
+    assert "git tag -a -m" in release_assets["run"]
+    assert 'git rev-parse "$RELEASE_TAG^{commit}"' in release_assets["run"]
+    assert "Never rewrite it" in release_assets["run"]
     for asset in ("dist.tar.gz", "dist.tar.gz.sha256", "release-manifest.json", "checksums.txt", "source-lock.json"):
         assert asset in release_assets["run"]
 

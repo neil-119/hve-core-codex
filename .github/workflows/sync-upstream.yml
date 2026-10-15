@@ -269,13 +269,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   open-metadata-pr:
-    name: Open a draft PR containing only source-lock metadata
+    name: Open a draft PR containing only source-lock metadata with the built-in token
     needs: build
     if: needs.build.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - name: Download external build artifact
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
@@ -290,18 +291,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Mint a short-lived pull-request-only GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.HVE_SYNC_APP_ID }}
-          private-key: ${{ secrets.HVE_SYNC_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
       - name: Commit only source-lock metadata and open a draft review PR
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANNEL: ${{ needs.build.outputs.channel }}
           TARGET_BRANCH: ${{ needs.build.outputs.target_branch }}
           SOURCE_REF: ${{ needs.build.outputs.source_ref }}
@@ -346,5 +338,7 @@ jobs:
           Keep this PR in draft until a human reviews the archive and required CLI/Desktop acceptance scenarios, including native hooks and Vally evidence. Stable publication remains blocked until the reviewed runtime evidence and all existing release eligibility checks pass.
 
           The current source-only workflow does not transport reviewer-authored runtime capture files into the rebuilt external distribution. Stable release eligibility remains fail-closed until a reviewed evidence-delivery path supplies those files and their envelope.
+
+          This PR is created with the repository's built-in workflow token, so GitHub will not automatically start other workflows from its bot-authored PR events. Start required checks manually with `gh workflow run validate.yml --ref $branch`, then keep human review mandatory.
           EOF
           gh pr create --repo "$GITHUB_REPOSITORY" --base "$TARGET_BRANCH" --head "$branch" --draft --title "chore(sync): $CHANNEL upstream $SOURCE_SHA" --body-file "$body"

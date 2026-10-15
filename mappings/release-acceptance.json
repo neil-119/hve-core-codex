@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "decision": "accept-with-limitations",
+  "reviewer": "neil-119",
+  "reviewed_on": "2026-10-14",
+  "historical_baseline": {
+    "source_sha": "49dfb73866f8c5f81bf734d6ca808dac25a2a330",
+    "model": "gpt-6-luna",
+    "reasoning_effort": "medium",
+    "counts": {
+      "passed": 1310,
+      "failed": 927,
+      "blocked": 439,
+      "execution_errors": 0,
+      "unrun": 0,
+      "planned": 2676
+    },
+    "reports": [
+      {
+        "path": "docs/luna-medium-full-suite.md",
+        "sha256_utf8_lf": "691fd56b6179830af091e0e3f2a8875f1631976b309936a868b158c21c0b7833"
+      },
+      {
+        "path": "docs/luna-eval-interpretation.md",
+        "sha256_utf8_lf": "b237facf1e4ba1c64a83ede82b186664e5d7e6ea41457a14b1a18ba7b43a7dd4"
+      }
+    ]
+  },
+  "deferred_host_checks": [
+    "child-read-only-permission"
+  ],
+  "limitations": [
+    "Historical baseline is accepted for behavioral context; it is not a new-candidate full-suite pass.",
+    "All 927 grading failures and 439 blocked trials remain recorded; wording mismatches explain specific examples, not every failure.",
+    "Desktop validation is manual and candidate-specific; missing approval is not a pass.",
+    "VS Code-specific evaluation is out of scope."
+  ]
+}

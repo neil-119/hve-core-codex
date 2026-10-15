@@ -7,10 +7,6 @@ on:
 permissions:
   actions: read
   contents: read
-
-  id-token: write
-  attestations: write
-  artifact-metadata: write
 concurrency:
   group: hve-core-weekly-sync
   cancel-in-progress: false
@@ -23,7 +19,8 @@ jobs:
       channel: stable
     permissions:
       actions: read
-      contents: read
+      contents: write
+      pull-requests: write
     secrets: inherit
 
   sync-edge:
@@ -33,7 +30,8 @@ jobs:
       channel: edge
     permissions:
       actions: read
-      contents: read
+      contents: write
+      pull-requests: write
     secrets: inherit
   publish-stable:
     name: Publish the latest reviewed stable only if changed
@@ -43,10 +41,8 @@ jobs:
       channel: stable
       confirm_edge_snapshot: false
     permissions:
-      contents: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
+      actions: read
+      contents: write
     secrets: inherit
   publish-edge:
     name: Publish the latest reviewed edge only if changed
@@ -56,8 +52,6 @@ jobs:
       channel: edge
       confirm_edge_snapshot: true
     permissions:
-      contents: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
+      actions: read
+      contents: write
     secrets: inherit

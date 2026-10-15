@@ -1,2 +1,5 @@
 * text=auto
 *.sh text eol=lf
+mappings/release-acceptance.json text eol=lf
+release/**/*.json text eol=lf
+release/**/checksums.txt text eol=lf
