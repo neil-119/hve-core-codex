@@ -111,7 +111,7 @@ def test_publisher_attaches_zip_and_verified_installer_assets():
     assert '"$(basename "$wheel").sha256"' in text
     release_step = next(step for step in publisher["steps"] if step.get("name", "").startswith("Create or verify the immutable unsigned tag"))
     assert release_step["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
-    assert "does not sign or notarize a desktop application" in release_step["run"]
+    assert "unsigned Git tags without GitHub artifact attestations" in release_step["run"]
     assert "verify assets with the published checksums" in release_step["run"]
     assert release_step["run"].index('git config user.name "github-actions[bot]"') < release_step["run"].index('git tag -a -m')
     assert "create-github-app-token@" not in "\n".join(step.get("uses", "") for step in publisher["steps"])
