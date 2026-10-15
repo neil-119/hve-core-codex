@@ -76,7 +76,10 @@ def acquire(url: str, ref: str | None, sha: str | None, channel: str, cache: Pat
         match = re.fullmatch(r"https://github.com/([^/]+)/([^/]+?)(?:\.git)?", url)
         if not match:
             raise PortError("A custom upstream URL requires --ref or --sha")
-        sources = discover_sources(channel=channel, owner=match[1], repository=match[2])
+        sources = discover_sources(
+            channel=channel, owner=match[1], repository=match[2],
+            token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
+        )
         if not sources:
             raise PortError(f"No published {channel} source found")
         selected = sources[-1]

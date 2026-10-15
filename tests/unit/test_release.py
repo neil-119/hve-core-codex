@@ -819,3 +819,36 @@ def test_release_parser_registers_documented_subcommands():
         ]
     )
     assert sync_args.release_command == "sync-eligibility"
+
+def test_stable_discovery_resolves_only_latest_unprocessed_release():
+    class TrackingApi(FakeApi):
+        def __init__(self):
+            super().__init__(tags=[_tag('v1', SHA_A), _tag('v2', SHA_B)],
+                             releases=[_release('v1', day=1), _release('v2', day=2)])
+            self.resolved_tags = []
+
+        def get_json(self, path):
+            if '/git/ref/tags/' in path:
+                self.resolved_tags.append(path.rsplit('/', 1)[-1])
+            return super().get_json(path)
+
+    api = TrackingApi()
+    result = discover_sources('stable', api=api)
+    assert result[0]['source_sha'] == SHA_B
+    assert api.resolved_tags == ['v2']
+
+
+def test_source_acquisition_forwards_ci_read_token(tmp_path, monkeypatch):
+    from hve_codex_porter.inventory import acquire
+    from hve_codex_porter.common import PortError
+    observed = []
+
+    def discover(**kwargs):
+        observed.append(kwargs)
+        return []
+
+    monkeypatch.setenv('GH_TOKEN', 'fixture-read-token')
+    monkeypatch.setattr('hve_codex_porter.release.discover_sources', discover)
+    with pytest.raises(PortError, match='No published'):
+        acquire('https://github.com/microsoft/hve-core.git', None, None, 'stable', tmp_path)
+    assert observed[0]['token'] == 'fixture-read-token'

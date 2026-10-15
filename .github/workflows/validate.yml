@@ -90,6 +90,8 @@ jobs:
           uv sync --locked --all-groups
 
       - name: Build latest stable upstream outside the repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/build.sh --output "$RUNNER_TEMP/dist" --channel stable
 
       - name: Validate external distribution and deterministic archive

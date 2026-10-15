@@ -496,9 +496,11 @@ def discover_sources(
         if tag_name not in tag_names:
             raise ReleaseError(f"Published upstream release {tag_name!r} has no matching tag in the paginated tag inventory.")
         published_at, stamp = _parse_time(release.get("published_at"))
-        source_sha = _resolve_tag_commit(api, owner, repository, tag_name)
+        # Stable publishes only the newest release; resolve older unprocessed
+        # tags only when the ledger requires a history-integrity check above.
+        source_sha = _resolve_tag_commit(api, owner, repository, tag_name) if channel != "stable" else ""
         previous = known_tag_shas.get(tag_name)
-        if previous and previous != source_sha:
+        if channel != "stable" and previous and previous != source_sha:
             raise ReleaseError(f"Upstream tag {tag_name!r} moved from {previous} to {source_sha}; refusing to rewrite history.")
         candidates.append(
             (
@@ -520,6 +522,7 @@ def discover_sources(
         if not candidates:
             return []
         latest = candidates[-1][1]
+        latest["source_sha"] = _resolve_tag_commit(api, owner, repository, latest["tag"])
         if _ledger_has_source(ledger_data, channel, latest["source_sha"]):
             return []
         results = [latest]

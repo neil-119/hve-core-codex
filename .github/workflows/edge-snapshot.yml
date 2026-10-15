@@ -58,6 +58,8 @@ jobs:
             --port-commit "$GITHUB_SHA"
 
       - name: Build the latest upstream main into RUNNER_TEMP
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/build.sh --channel edge --output "$RUNNER_TEMP/dist"
 
       - name: Validate the external distribution
