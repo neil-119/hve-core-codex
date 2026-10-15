@@ -1,0 +1,15 @@
+{
+  "arguments": [
+    "--focus",
+    "accessibility",
+    "--target",
+    "profile-preferences"
+  ],
+  "choices": [
+    "continue",
+    "revise",
+    "stop"
+  ],
+  "project_slug": "profile-research",
+  "stage": "problem-space"
+}

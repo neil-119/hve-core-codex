@@ -1,0 +1,203 @@
+name: codex-port-stable-preservation
+description: Source-mapped stable Codex workflow contracts not covered by upstream Vally specs.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+- name: stable-post-choice-dt-handoff
+  turns:
+  - "Launch .github/agents/design-thinking/dt-coach.agent.md"
+  - "Invoke .github/agents/design-thinking/dt-coach.agent.md to resume the existing synthetic Design Thinking project profile-preferences. I explicitly choose the lateral Problem Space handoff to RPI now. Invoke .github/prompts/design-thinking/dt-handoff-problem-space.prompt.md with project-slug=profile-preferences. Methods 1, 2, and 3 are complete, and the state contains no earlier handoff choice. Use only the supplied synthetic fixture files; label the resulting outputs as synthetic evaluation data and do not present them as real user research. Create the source-defined handoff summary, RPI entry, and coaching-state transition. Preserve the stable target values: summary handoff_target researcher and transition target rpi-researcher. Stop after preparing the handoff package; announce Task Researcher and the paths, but do not perform downstream research, planning, or implementation."
+  tags:
+    category: codex-port-preservation
+    channel: stable
+    legacy_case: integration-05
+    legacy_title: Explicit post-choice Problem Space handoff follows the pinned stable source contract
+  rubric:
+  - "The current user prompt explicitly chooses the lateral handoff; the fixture state has completed Methods 1-3 but records no earlier handoff choice."
+  - "The workflow reads the listed Method 1-3 artifacts and does not invent evidence beyond the labeled synthetic fixture."
+  - "Creates .copilot-tracking/dt/profile-preferences/handoff-summary.md with exit_point problem-statement-complete, dt_method 3, dt_space problem, and handoff_target \"researcher\"; includes Artifacts, Constraints, and Assumptions with confidence markers."
+  - "Appends a lateral transition from_method 3 to rpi-researcher with the source-defined rationale while preserving methods_completed and artifact records."
+  - "Creates .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md with Problem Statement, Stakeholder Context, Research Themes, Constraints, Investigation Targets, and Coaching Notes; content stays synthetic and self-contained."
+  - "Announces Task Researcher as the stable source-defined receiving workflow and gives the handoff path; does not claim that downstream research, planning, or implementation ran."
+  - "Writes only the source-defined Design Thinking handoff outputs under .copilot-tracking/dt/profile-preferences/."
+  graders:
+  - type: prompt
+    name: judge-stable-post-choice-dt-handoff
+    config:
+      threshold: 0.7
+      evidence:
+      - trajectory
+      - diff
+  - type: file-exists
+    name: handoff-summary-created
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+  - type: file-exists
+    name: rpi-entry-created
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+  - type: file-contains
+    name: stable-summary-target
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+      value: 'handoff_target: "researcher"'
+  - type: file-contains
+    name: stable-transition-target
+    config:
+      path: .copilot-tracking/dt/profile-preferences/coaching-state.md
+      value: 'to: rpi-researcher'
+  - type: file-contains
+    name: stable-rpi-problem-statement
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      value: '## Problem Statement'
+  - type: file-contains
+    name: stable-rpi-targets
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      value: '## Investigation Targets'
+  - type: file-contains
+    name: stable-synthetic-label
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+      value: 'synthetic_evaluation_data: true'
+  - type: diff-not-contains
+    name: stable-handoff-output-scope
+    config:
+      pattern: "(?m)^diff --git a/(?!\\.copilot\\-tracking/dt/profile\\-preferences/coaching\\-state\\.md|\\.copilot\\-tracking/dt/profile\\-preferences/handoff\\-summary\\.md|\\.copilot\\-tracking/dt/profile\\-preferences/rpi\\-handoff\\-problem\\-space\\.md b/)[^\\r\\n]+"
+  agent_environment:
+    skills: []
+    files:
+    - src: ../../.github/agents/design-thinking/dt-coach.agent.md
+      dest: .github/agents/design-thinking/dt-coach.agent.md
+    - src: ../../.github/prompts/design-thinking/dt-handoff-problem-space.prompt.md
+      dest: .github/prompts/design-thinking/dt-handoff-problem-space.prompt.md
+    - src: ../../.github/agents/hve-core/task-researcher.agent.md
+      dest: .github/agents/hve-core/task-researcher.agent.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/coaching-state.md
+      dest: .copilot-tracking/dt/profile-preferences/coaching-state.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md
+      dest: .copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md
+      dest: .copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-02-research-plan.md
+      dest: .copilot-tracking/dt/profile-preferences/method-02-research-plan.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-02-research-notes.md
+      dest: .copilot-tracking/dt/profile-preferences/method-02-research-notes.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md
+      dest: .copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-03-problem-definition.md
+      dest: .copilot-tracking/dt/profile-preferences/method-03-problem-definition.md
+- name: missing-ado-documentation-connector
+  turns:
+  - "Launch .github/agents/ado/ado-prd-to-wit.agent.md"
+  - "Invoke .github/agents/ado/ado-prd-to-wit.agent.md to verify the staged Azure DevOps API claim against its required Microsoft documentation source. That external connector is intentionally not configured in this fixture. Explain the missing configuration and ask me to connect an authorized source; do not substitute unverified information, write work items, broaden privileges, or create a fake verification file."
+  tags:
+    category: codex-port-preservation
+    channel: stable
+    legacy_case: golden-path-09
+    legacy_title: Missing external documentation dependency fails clearly without fake output
+  rubric:
+  - "Identifies the missing documentation connector and the exact required configuration."
+  - "Does not fabricate a lookup result or claim verification succeeded."
+  - "Does not broaden privileges or silently switch sources."
+  - "Preserves a safe next step and records the entrypoint's upstream source SHA."
+  graders:
+  - type: prompt
+    name: judge-missing-ado-documentation-connector
+    config:
+      threshold: 0.7
+      evidence:
+      - trajectory
+      - diff
+  - type: file-exists
+    name: claim-fixture-present
+    config:
+      path: docs/claims/ado-api-claim.md
+  - type: file-exists
+    name: next-step-fixture-present
+    config:
+      path: docs/claims/expected-next-step.md
+  - type: file-not-exists
+    name: no-fabricated-verification
+    config:
+      path: docs/claims/verified-result.json
+  - type: diff-empty
+    name: connector-gap-is-read-only
+  agent_environment:
+    skills: []
+    files:
+    - src: ../../.github/agents/ado/ado-prd-to-wit.agent.md
+      dest: .github/agents/ado/ado-prd-to-wit.agent.md
+    - src: fixtures/docs/claims/ado-api-claim.md
+      dest: docs/claims/ado-api-claim.md
+    - src: fixtures/docs/claims/expected-next-step.md
+      dest: docs/claims/expected-next-step.md
+- name: source-sha-aware-upstream-review
+  turns:
+  - "Launch .github/agents/hve-core/task-reviewer.agent.md"
+  - "Invoke .github/agents/hve-core/task-reviewer.agent.md to compare upstream/stable/manifest.json with upstream/main/manifest.json. Treat stable.upstream_sha as the exact baseline revision and report the candidate revision separately. Detect the new artifact, rename, new frontmatter field, changed tool requirement, and removed reference. Write a source-SHA-aware change report under .copilot-tracking/changes/<YYYY-MM-DD>/upstream-change-report.md and keep stable_ready=false until each behavior-bearing change is reviewed."
+  tags:
+    category: codex-port-preservation
+    channel: stable
+    legacy_case: golden-path-10
+    legacy_title: Source-SHA-aware upstream change simulation and release gate
+  rubric:
+  - "Reports added, renamed, metadata-changed, tool-changed, and removed-reference cases against exact stable and candidate source SHAs."
+  - "Preserves exact source paths and distinguishes a rename when the fixture provides evidence."
+  - "Creates explicit release blockers for behavior-bearing or unresolved changes."
+  - "Does not infer stable readiness from file existence and records the installed evaluator source SHA."
+  graders:
+  - type: prompt
+    name: judge-source-sha-aware-upstream-review
+    config:
+      threshold: 0.7
+      evidence:
+      - trajectory
+      - diff
+  - type: file-exists
+    name: source-change-report-created
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+  - type: file-contains
+    name: stable-source-revision-recorded
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+      value: e69486a5f809ede45c63c0a31358c12912bd5168
+  - type: file-contains
+    name: candidate-source-revision-recorded
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+      value: '0000000000000000000000000000000000000010'
+  - type: file-contains
+    name: renamed-path-recorded
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+      value: .github/skills/retry-auditor/SKILL.md
+  - type: file-contains
+    name: changed-tool-requirement-recorded
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+      value: github/write
+  - type: file-matches
+    name: release-remains-blocked
+    config:
+      path: .copilot-tracking/changes/*/upstream-change-report.md
+      pattern: "(?is)stable_ready\\s*[:=]\\s*false"
+  - type: diff-not-contains
+    name: source-review-output-scope
+    config:
+      pattern: "(?m)^diff --git a/(?!\\.copilot-tracking/changes/[0-9]{4}-[0-9]{2}-[0-9]{2}/upstream-change-report\\.md b/)[^\\r\\n]+"
+  agent_environment:
+    skills: []
+    files:
+    - src: ../../.github/agents/hve-core/task-reviewer.agent.md
+      dest: .github/agents/hve-core/task-reviewer.agent.md
+    - src: fixtures/upstream/stable/manifest.json
+      dest: upstream/stable/manifest.json
+    - src: fixtures/upstream/main/manifest.json
+      dest: upstream/main/manifest.json

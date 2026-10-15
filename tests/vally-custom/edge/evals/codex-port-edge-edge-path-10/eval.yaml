@@ -1,0 +1,63 @@
+name: codex-port-edge-edge-path-10
+description: Original edge edge-path-10 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 1200s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-10-manifest-gate
+    turns:
+      - Launch .github/skills/rpi/rpi-research/SKILL.md
+      - Invoke .github/skills/rpi/rpi-research/SKILL.md to compare upstream/stable/manifest.json and upstream/candidate/manifest.json. Stable SHA is baseline; identify additions, renames, metadata/tool changes, and removed references. Write .copilot-tracking/research/<YYYY-MM-DD>/upstream-edge-audit-research.md and keep readiness blocked pending review.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-10
+      legacy_title: Manifest comparison blocks readiness on unreviewed changes
+      prompt_only_checks:
+        - release-blocker
+        - source-recovery
+      deterministic_additions:
+        - The dated research artifact path and manifest fixture checks are deterministic; they do not establish that the report correctly classifies every semantic change.
+        - The release-blocker assertion remains prompt-graded. A matching word or status string alone is not proof that readiness is correctly blocked by the evidence.
+        - Source recovery remains a host acceptance check; this Vally stimulus does not claim the skill was read or recovered.
+    rubric:
+      - Separates pinned baseline from candidate and reports behavior-bearing differences.
+      - Readiness stays blocked; uses current dated Research path.
+    graders:
+      - type: prompt
+        name: judge-edge-path-10
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: baseline
+        config:
+          path: upstream/stable/manifest.json
+      - type: file-contains
+        name: tool-change
+        config:
+          path: upstream/candidate/manifest.json
+          value: github/write
+      - type: file-exists
+        name: research
+        config:
+          path: .copilot-tracking/research/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/upstream-edge-audit-research.md
+      - type: diff-not-contains
+        name: research-output-scope
+        config:
+          pattern: '(?m)^diff --git a/(?!\.copilot-tracking/research/[0-9]{4}-[0-9]{2}-[0-9]{2}/upstream-edge-audit-research\.md b/)[^\r\n]+'
+    agent_environment:
+      skills:
+        - ../../.github/skills/rpi/rpi-research
+      files:
+        - src: ../../.github/skills/rpi/rpi-research/SKILL.md
+          dest: .github/skills/rpi/rpi-research/SKILL.md
+        - src: fixtures/upstream/stable/manifest.json
+          dest: upstream/stable/manifest.json
+        - src: fixtures/upstream/candidate/manifest.json
+          dest: upstream/candidate/manifest.json

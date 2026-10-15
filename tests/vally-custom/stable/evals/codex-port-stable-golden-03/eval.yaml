@@ -1,0 +1,67 @@
+name: codex-port-stable-golden-path-03
+description: Original stable golden-path-03 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-03-accessibility-security-rai-privacy
+    turns:
+      - Launch .github/agents/rai-planning/rai-planner.agent.md
+      - Invoke .github/agents/rai-planning/rai-planner.agent.md to plan a review of the staged profile-preferences workflow. Use .github/agents/security/security-reviewer.agent.md and .github/agents/project-planning/ux-ui-designer.agent.md as distinct perspectives. Assess accessibility, security, Responsible AI, and privacy; cite the staged references; save the resulting plan under .copilot-tracking/rai-plans/profile-preferences/. Do not disclose private input or invent connector verification.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-03
+      legacy_title: Accessibility, security, Responsible AI, and privacy review
+      prompt_only_checks:
+        - no-unapproved-external-action
+        - recover-governance-source-artifacts
+    rubric:
+      - Covers accessibility, security, Responsible AI, and privacy as distinct review lenses.
+      - Uses the installed security and UX source roles and cites the supplied policy documents.
+      - Connects findings to user impact and evidence while labeling uncertainty.
+      - Writes only the source workflow's canonical RAI tracking artifact and protects private input.
+    graders:
+      - type: prompt
+        name: judge-golden-path-03
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-contains
+        name: accessibility-policy-staged
+        config:
+          path: docs/accessibility-policy.md
+          value: screen-reader
+      - type: file-contains
+        name: security-policy-staged
+        config:
+          path: docs/security-policy.md
+          value: least privilege
+      - type: file-exists
+        name: rai-plan-created
+        config:
+          path: .copilot-tracking/rai-plans/profile-preferences/*
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/agents/rai-planning/rai-planner.agent.md
+          dest: .github/agents/rai-planning/rai-planner.agent.md
+        - src: ../../.github/agents/security/security-reviewer.agent.md
+          dest: .github/agents/security/security-reviewer.agent.md
+        - src: ../../.github/agents/project-planning/ux-ui-designer.agent.md
+          dest: .github/agents/project-planning/ux-ui-designer.agent.md
+        - src: fixtures/src/profile_form.html
+          dest: src/profile_form.html
+        - src: fixtures/docs/accessibility-policy.md
+          dest: docs/accessibility-policy.md
+        - src: fixtures/docs/security-policy.md
+          dest: docs/security-policy.md
+        - src: fixtures/docs/privacy-policy.md
+          dest: docs/privacy-policy.md
+        - src: fixtures/docs/rai-policy.md
+          dest: docs/rai-policy.md

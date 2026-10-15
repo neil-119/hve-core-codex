@@ -1,0 +1,1 @@
+{"upstream_ref":"candidate","upstream_sha":"2222222222222222222222222222222222222222","artifacts":[{"path":"retry-auditor","renamed_from":"legacy","description":"Retries","tools":["read/file","github/write"]},{"path":"new-auditor","tools":["read/file"]}],"references":[]}

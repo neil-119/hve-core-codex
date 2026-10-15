@@ -1,0 +1,176 @@
+name: codex-port-edge-preservation
+description: Source-mapped current-edge Codex workflow contracts not covered by upstream Vally specs.
+type: capability
+defaults:
+  runs: 1
+  timeout: 1800s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+- name: edge-post-choice-dt-handoff
+  turns:
+  - "Launch .github/agents/design-thinking/dt-coach.agent.md"
+  - "Invoke .github/agents/design-thinking/dt-coach.agent.md for the existing synthetic Design Thinking project profile-preferences. I explicitly choose the lateral Problem Space handoff to RPI now. Follow the currently packaged DT-to-RPI integration procedure for project-slug=profile-preferences. Methods 1, 2, and 3 are complete, and the state contains no earlier handoff choice. Use only the supplied synthetic fixture files; label the resulting outputs as synthetic evaluation data and do not present them as real user research. In the handoff summary, include the literal line synthetic_evaluation_data: true in a clearly labeled evaluation note; preserve all source-required frontmatter fields. Create the source-defined handoff summary, RPI entry, and coaching-state transition. Preserve the current target rpi-research in both the summary and transition log, and include the source-compatible DT Artifact Paths section. Stop after preparing the handoff package; announce rpi-research and the paths, but do not begin downstream research, planning, or implementation."
+  tags:
+    category: codex-port-preservation
+    channel: edge
+    legacy_case: edge-integration-05
+    legacy_title: Explicit post-choice Problem Space handoff follows the pinned edge source contract
+  rubric:
+  - "The current user prompt explicitly chooses the lateral handoff; the fixture state has completed Methods 1-3 but records no earlier handoff choice."
+  - "The workflow follows the current DT-to-RPI integration procedure, reads the listed Method 1-3 artifacts, and does not invent evidence beyond the labeled synthetic fixture."
+  - "Creates .copilot-tracking/dt/profile-preferences/handoff-summary.md with exit_point problem-statement-complete, dt_method 3, dt_space problem, and handoff_target \"rpi-research\"; includes Artifacts, Constraints, and Assumptions with confidence markers."
+  - "Appends a lateral transition from_method 3 to rpi-research with the source-defined rationale while preserving methods_completed and artifact records."
+  - "Creates .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md with Problem Statement, Stakeholder Context, Research Themes, Constraints, Investigation Targets, and Coaching Notes; includes the source-compatible DT Artifact Paths section."
+  - "Announces rpi-research as the receiving phase and gives the handoff path; distinguishes that phase from the rpi-agent coordinator and does not claim downstream research, planning, or implementation ran."
+  - "Writes only the source-defined Design Thinking handoff outputs under .copilot-tracking/dt/profile-preferences/."
+  graders:
+  - type: prompt
+    name: judge-edge-post-choice-dt-handoff
+    config:
+      threshold: 0.7
+      evidence:
+      - trajectory
+      - diff
+  - type: file-exists
+    name: edge-handoff-summary-created
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+  - type: file-exists
+    name: edge-rpi-entry-created
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+  - type: file-contains
+    name: edge-summary-target
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+      value: 'handoff_target: "rpi-research"'
+  - type: file-contains
+    name: edge-transition-target
+    config:
+      path: .copilot-tracking/dt/profile-preferences/coaching-state.md
+      value: 'to: "rpi-research"'
+  - type: file-contains
+    name: edge-rpi-problem-statement
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      value: '## Problem Statement'
+  - type: file-contains
+    name: edge-rpi-targets
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      value: '## Investigation Targets'
+  - type: file-contains
+    name: edge-artifact-paths-section
+    config:
+      path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      value: '## DT Artifact Paths'
+  - type: file-contains
+    name: edge-synthetic-label
+    config:
+      path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+      value: 'synthetic_evaluation_data: true'
+  - type: diff-not-contains
+    name: edge-handoff-output-scope
+    config:
+      pattern: "(?m)^diff --git a/(?!\\.copilot\\-tracking/dt/profile\\-preferences/coaching\\-state\\.md|\\.copilot\\-tracking/dt/profile\\-preferences/handoff\\-summary\\.md|\\.copilot\\-tracking/dt/profile\\-preferences/rpi\\-handoff\\-problem\\-space\\.md b/)[^\\r\\n]+"
+  agent_environment:
+    skills:
+    - ../../.github/skills/design-thinking/dt-coaching-foundation
+    - ../../.github/skills/design-thinking/dt-methods
+    - ../../.github/skills/design-thinking/dt-rpi-integration
+    - ../../.github/skills/rpi/rpi-research
+    files:
+    - src: ../../.github/agents/design-thinking/dt-coach.agent.md
+      dest: .github/agents/design-thinking/dt-coach.agent.md
+    - src: ../../.github/skills/design-thinking/dt-coaching-foundation/SKILL.md
+      dest: .github/skills/design-thinking/dt-coaching-foundation/SKILL.md
+    - src: ../../.github/skills/design-thinking/dt-methods/SKILL.md
+      dest: .github/skills/design-thinking/dt-methods/SKILL.md
+    - src: ../../.github/skills/design-thinking/dt-rpi-integration/SKILL.md
+      dest: .github/skills/design-thinking/dt-rpi-integration/SKILL.md
+    - src: ../../.github/skills/rpi/rpi-research/SKILL.md
+      dest: .github/skills/rpi/rpi-research/SKILL.md
+    - src: ../../.github/agents/hve-core/rpi-agent.agent.md
+      dest: .github/agents/hve-core/rpi-agent.agent.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/coaching-state.md
+      dest: .copilot-tracking/dt/profile-preferences/coaching-state.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md
+      dest: .copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md
+      dest: .copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-02-research-plan.md
+      dest: .copilot-tracking/dt/profile-preferences/method-02-research-plan.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-02-research-notes.md
+      dest: .copilot-tracking/dt/profile-preferences/method-02-research-notes.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md
+      dest: .copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md
+    - src: fixtures/.copilot-tracking/dt/profile-preferences/method-03-problem-definition.md
+      dest: .copilot-tracking/dt/profile-preferences/method-03-problem-definition.md
+- name: positive-synthetic-analysis-resume
+  turns:
+  - "Launch .github/agents/data-science-engineering/data-science-engineering-coach.agent.md"
+  - "Invoke .github/agents/data-science-engineering/data-science-engineering-coach.agent.md for the current data-science-and-engineering coach. I reviewed the supplied session state and explicitly choose to continue its current analysis job as a new invocation; do not switch jobs. Follow .github/skills/data-science-engineering/analysis-authoring/SKILL.md, .github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md, and .github/skills/project-planning/adr-author/SKILL.md. The analysis question is: for week 1, what is the mean observed retention_pct across cohorts, and how many of the three cohort rows are missing retention_pct? The audience is a product analytics reviewer. Use only data/retention.csv and the supplied synthetic data profile and objectives. The deliverable shape is one Jupyter notebook only, at docs/data/retention-analysis.ipynb; docs/data is the confirmed local output root, and I authorize this local notebook. The dataset and results are synthetic. Do not impute the blank value or infer trends, causality, or real-world behavior. Follow the analysis-authoring notebook sequence and all source gates. Before EACH durable artifact write, including the notebook and the required coach state/artifact update, assemble that artifact's exact proposed content in a contained scratch file and run the packaged adr-author scanner with --data against that exact file. Apply the same gates to every such artifact: accept the write only when the JSON report has status=completed, modes.data=true, and summary.high=0. If warning findings remain without a high finding, surface their category and location and wait for my decision before that write. If the state is invalid or mismatched, the scanner is unavailable, or the report errors or contains a high finding, do not perform that write; stop and report the blocker. After each passing scan, write only the exact scanned content to that artifact's authorized local path. Keep scratch files contained, and do not use external services or install packages."
+  tags:
+    category: codex-port-preservation
+    channel: edge
+    legacy_case: edge-integration-06
+    legacy_title: Resumed synthetic analysis with explicit question and notebook authorization
+  rubric:
+  - "Resumes the existing synthetic state, announces the active analysis job and relevant state before execution, and does not initialize a new project or silently change jobs."
+  - "Uses analysis-authoring, references the supplied profile and objectives, follows the notebook completeness guidance, and describes the question, data, missingness, observed-data limitation, and next step without unsupported interpretation."
+  - "Computes the requested observed arithmetic mean and denominator from the three supplied rows, reports the missing-row count, and does not impute or infer a trend or causal result."
+  - "Before every durable artifact write (notebook and required coach state/artifact update), runs the packaged scan_sensitive_content.py with --data against that artifact's exact proposed content and requires status=completed, modes.data=true, and summary.high=0; surfaces any warning category and location and waits for the user's decision before that write; if scanning errors or reports a high finding, performs no corresponding write and reports the blocker. Each successful write contains only the exact scanned content at its authorized local path; scratch stays contained and no external service or package installation is used."
+  - "Writes only the explicitly authorized local notebook and required coach state/artifact update; leaves the input dataset and installed/source artifacts unchanged."
+  graders:
+  - type: prompt
+    name: judge-positive-synthetic-analysis-resume
+    config:
+      threshold: 0.7
+      evidence:
+      - trajectory
+      - diff
+  - type: file-exists
+    name: authorized-notebook-created
+    config:
+      path: docs/data/retention-analysis.ipynb
+  - type: diff-contains
+    name: coach-state-updated
+    config:
+      pattern: "(?m)^diff --git a/\\.copilot-tracking/ds/retention-analysis/session-state\\.md b/"
+  - type: file-contains
+    name: notebook-recorded-in-coach-state
+    config:
+      path: .copilot-tracking/ds/retention-analysis/session-state.md
+      value: docs/data/retention-analysis.ipynb
+  - type: file-matches
+    name: synthetic-input-csv-unchanged
+    config:
+      path: data/retention.csv
+      pattern: "(?s)^cohort,week,retention_pct\\nA,1,72\\nB,1,\\nC,1,68\\n$"
+  - type: diff-not-contains
+    name: analysis-output-scope
+    config:
+      pattern: "(?m)^diff --git a/(?!docs/data/retention\\-analysis\\.ipynb|\\.copilot\\-tracking/ds/retention\\-analysis/session\\-state\\.md b/)[^\\r\\n]+"
+  agent_environment:
+    skills:
+    - ../../.github/skills/data-science-engineering/analysis-authoring
+    - ../../.github/skills/data-science-engineering/data-science-engineering-foundation
+    - ../../.github/skills/project-planning/adr-author
+    files:
+    - src: ../../.github/agents/data-science-engineering/data-science-engineering-coach.agent.md
+      dest: .github/agents/data-science-engineering/data-science-engineering-coach.agent.md
+    - src: ../../.github/skills/data-science-engineering/analysis-authoring/SKILL.md
+      dest: .github/skills/data-science-engineering/analysis-authoring/SKILL.md
+    - src: ../../.github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md
+      dest: .github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md
+    - src: ../../.github/skills/project-planning/adr-author/SKILL.md
+      dest: .github/skills/project-planning/adr-author/SKILL.md
+    - src: fixtures/data/retention.csv
+      dest: data/retention.csv
+    - src: fixtures/data/retention-profile.md
+      dest: data/retention-profile.md
+    - src: fixtures/docs/data/objectives.md
+      dest: docs/data/objectives.md
+    - src: fixtures/.copilot-tracking/ds/retention-analysis/session-state.md
+      dest: .copilot-tracking/ds/retention-analysis/session-state.md

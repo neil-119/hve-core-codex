@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "scope": "codex-host",
+  "channel": "edge",
+  "description": "Codex-specific discovery, trust, hook delivery, resume and native role routing. Workflow behavior is evaluated by Vally.",
+  "scenarios": [
+    {
+      "id": "edge-integration-01",
+      "key": "implicit-research-selection",
+      "title": "Research task selects the installed workflow without an explicit skill mention",
+      "invocation_mode": "implicit",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/skills/rpi/rpi-research/SKILL.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/skills/rpi/rpi-research/SKILL.md"
+      ],
+      "prompts": [
+        "Research how to add an optional retry limit to the Python importer in this project. Inspect the code, compare approaches, and write a research artifact for implementation planning using the appropriate installed workflow. Research only; do not implement or edit the importer. Leave all human approval boxes unchecked."
+      ],
+      "rubric": [
+        "The prompt contains no explicit skill invocation. Observable file-read/tool evidence shows Codex selected the relevant installed research skill, directly or through the HVE catalog, and read its procedure.",
+        "Produces evidence-based research under the source-defined tracking convention while leaving the importer unchanged.",
+        "Skill selection is recorded from observable events, not inferred solely from a final answer or artifact filename."
+      ],
+      "fixture_files": {
+        "src/importer.py": "def import_rows(rows):\n    return [row for row in rows if row]\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "research-input-present",
+          "kind": "fixture_exists",
+          "path": "src/importer.py"
+        },
+        {
+          "id": "source-remains-read-only",
+          "kind": "workspace_file_unchanged",
+          "path": "src/importer.py"
+        },
+        {
+          "id": "research-artifact",
+          "kind": "workspace_glob_exists",
+          "path": ".copilot-tracking/research/**/*.md"
+        },
+        {
+          "id": "implicit-skill-selection-observed",
+          "kind": "implicit_skill_selection",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-02",
+      "key": "explicit-only-negative-routing",
+      "title": "An unrelated task does not activate an explicit-only external workflow",
+      "invocation_mode": "implicit",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/agents/project-planning/backlog-manager.agent.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/agents/project-planning/backlog-manager.agent.md"
+      ],
+      "prompts": [
+        "Read notes.txt and tell me how many nonempty lines it contains. This is a local counting task. Do not edit files or contact external services."
+      ],
+      "rubric": [
+        "Returns the correct count of two using the local fixture.",
+        "No explicit-only backlog workflow or delegated backlog role is activated; inspect the complete tool trace rather than accepting a statement of non-invocation.",
+        "No files are edited and no connector or external-write operation is attempted."
+      ],
+      "fixture_files": {
+        "notes.txt": "alpha\n\nbeta\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "count-input-present",
+          "kind": "fixture_exists",
+          "path": "notes.txt"
+        },
+        {
+          "id": "input-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "notes.txt"
+        },
+        {
+          "id": "no-inappropriate-skill-selection",
+          "kind": "negative_skill_selection",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-03",
+      "key": "trusted-hooks-native-positive-negative-resume",
+      "title": "Trusted native hooks deliver only matching context, including after resume",
+      "source_artifacts": [
+        ".github/copilot-instructions.md"
+      ],
+      "prompts": [
+        "Read src/app.py directly and describe what its function returns. The file exists; no directory listing is needed. Do not edit files. Do not read the rule registry or hook script to obtain an answer. Apply any guidance supplied by the host. If the file read fails, report the failure and stop without retries or alternate tools.",
+        "Inspect docs/notes.txt and describe its contents. Do not edit files or read the rule registry. Apply only guidance relevant to this target.",
+        "Resume by reading src/app.py directly again. Do not edit files or read the rule registry. Apply guidance relevant to this target. If the file read fails, report the failure and stop without retries or alternate tools."
+      ],
+      "rubric": [
+        "Before starting, review and trust the installed hooks in the disposable project. Capture host evidence of trust and event delivery without bypassing review.",
+        "SessionStart delivers the session-general rule. PreToolUse supplies the Python rule when the actual tool targets src/app.py, even though the initial prompt contains no explicit filename.",
+        "The Python rule is absent from context newly delivered for docs/notes.txt. Its sentinel may remain in conversation history; that is not a new injection.",
+        "Relevant guidance is delivered again when needed after resume, without duplicate suppression losing a later turn's context.",
+        "The output markers support the trace but do not replace host-event and additional-context evidence. Missing host instrumentation remains unverified."
+      ],
+      "fixture_files": {
+        "src/app.py": "def greeting():\n    return 'hello'\n",
+        "docs/notes.txt": "Documentation fixture.\n",
+        "rules/index.json": {
+          "version": 1,
+          "rules": [
+            {
+              "id": "integration-general",
+              "source": "general.instructions.md",
+              "path": "general.md",
+              "apply_to": [],
+              "precedence": 0,
+              "imports": []
+            },
+            {
+              "id": "integration-python",
+              "source": "python.instructions.md",
+              "path": "python.md",
+              "apply_to": [
+                "src/**/*.py",
+                "!src/generated/**"
+              ],
+              "precedence": 10,
+              "imports": []
+            }
+          ]
+        },
+        "rules/general.md": "When reporting on this fixture, include SESSION_GUIDANCE_OBSERVED.\n",
+        "rules/python.md": "When reporting on a matching Python target, include PYTHON_GUIDANCE_OBSERVED.\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "hook-rules-selection",
+          "kind": "staged_rules_match",
+          "expected_by_path": {
+            "src/app.py": [
+              "integration-general",
+              "integration-python"
+            ],
+            "src/generated/app.py": [
+              "integration-general"
+            ],
+            "docs/notes.txt": [
+              "integration-general"
+            ]
+          }
+        },
+        {
+          "id": "python-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "src/app.py"
+        },
+        {
+          "id": "documentation-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "docs/notes.txt"
+        },
+        {
+          "id": "native-hook-delivery",
+          "kind": "native_hook_context",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-04",
+      "key": "delegated-native-role-and-hook-context",
+      "title": "A delegated custom role starts with its intended instructions and hook context",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/skills/rpi/rpi-research/SKILL.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/skills/rpi/rpi-research/SKILL.md",
+        ".github/agents/hve-core/subagents/rpi-researcher.agent.md"
+      ],
+      "prompts": [
+        "Invoke $actual-entrypoint for read-only research of src/app.py. Delegate the inspection to the installed rpi-researcher custom role, ask it to report relevant project guidance and findings, wait for its real result, and summarize it. Do not implement changes, invent a subagent response, or inspect the hook script or rule registry for fixture markers."
+      ],
+      "rubric": [
+        "Observable spawn/start evidence identifies the installed rpi-researcher role rather than an unnamed generic replacement.",
+        "The child receives the intended developer instructions and SubagentStart hook context; parent-side statements alone are insufficient.",
+        "Delegated results are awaited and aggregated accurately; source and human approvals remain unchanged.",
+        "Parent and delegated sessions use the requested Luna model and effort. Unavailable model or child-usage evidence is reported as incomplete."
+      ],
+      "fixture_files": {
+        "src/app.py": "def greeting():\n    return 'hello'\n",
+        "rules/index.json": {
+          "version": 1,
+          "rules": [
+            {
+              "id": "integration-child",
+              "source": "general.instructions.md",
+              "path": "child.md",
+              "apply_to": [],
+              "precedence": 0,
+              "imports": []
+            }
+          ]
+        },
+        "rules/child.md": "Include CHILD_GUIDANCE_OBSERVED when describing this project's guidance.\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "source-present",
+          "kind": "fixture_exists",
+          "path": "src/app.py"
+        },
+        {
+          "id": "source-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "src/app.py"
+        },
+        {
+          "id": "native-delegation-and-context",
+          "kind": "native_delegation_context",
+          "runtime_required": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+name: codex-port-stable-golden-path-08
+description: Original stable golden-path-08 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-08-user-facing-handoff-arguments-and-fallback
+    turns:
+      - Launch .github/agents/design-thinking/dt-coach.agent.md
+      - Invoke .github/agents/design-thinking/dt-coach.agent.md with the existing problem-space context. Preserve the project slug profile-research and the argument `--focus accessibility --target profile-preferences`. If the user chooses a lateral handoff to RPI, invoke .github/prompts/design-thinking/dt-handoff-problem-space.prompt.md and preserve the state pointer. Offer continue, revise, or stop. If the Codex host lacks a handoff UI, ask the same choices in ordinary chat and wait for my decision.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-08
+      legacy_title: User-facing handoff preserves arguments, state, choices, and host fallback
+      prompt_only_checks:
+        - argument-preservation
+        - human-choice-before-continuation
+        - recover-handoff-source-artifacts
+    rubric:
+      - Preserves the original project slug, arguments, and workflow state pointer.
+      - Uses the source-defined handoff entrypoint and asks the user for continue, revise, or stop.
+      - Provides an ordinary-chat fallback when host handoff UI is unavailable.
+      - Does not silently resume an approval-gated stage and preserves source SHA evidence.
+    graders:
+      - type: prompt
+        name: judge-golden-path-08
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-not-exists
+        name: handoff-summary-awaits-user-choice
+        config:
+          path: .copilot-tracking/dt/profile-research/handoff-summary.md
+      - type: diff-empty
+        name: no-local-workspace-mutation
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/agents/design-thinking/dt-coach.agent.md
+          dest: .github/agents/design-thinking/dt-coach.agent.md
+        - src: ../../.github/prompts/design-thinking/dt-handoff-problem-space.prompt.md
+          dest: .github/prompts/design-thinking/dt-handoff-problem-space.prompt.md
+        - src: fixtures/.copilot-tracking/dt/profile-research/problem-statement.md
+          dest: .copilot-tracking/dt/profile-research/problem-statement.md
+        - src: fixtures/.copilot-tracking/dt/profile-research/handoff-state.json
+          dest: .copilot-tracking/dt/profile-research/handoff-state.json

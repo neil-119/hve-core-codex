@@ -1,0 +1,37 @@
+# Luna evaluation planning
+
+Behavior tests retain Microsoft's Vally definitions and scoring. Codex host tests cover native discovery, hooks, and role loading separately. Only the standard installed Codex CLI is supported; the experimental fork and its judge/simulation integrations have been retired.
+
+The pinned edge discovery plan contains 23 specs, 2,676 trials, and 397 LLM grader applications. These are planned workloads, not completed tests or a fixed number of model calls. Tool loops, delegated work, panels, and retries add usage.
+
+There is no reliable full-suite credit estimate yet. Supported representative workflows must be measured on standard Codex before extrapolating by workload group. Earlier experimental trial measurements do not establish the cost or correctness of that target. No spending cap is implemented.
+
+See [current capability limitations](vally-port-status.md). Unsupported cases stop before execution and require user decisions; they are not silently skipped or implemented by patching Codex.
+
+**Current spending decision:** No further paid trials are authorized for this closeout. The user accepts the major RPI results for now and will perform desktop validation manually. The analysis follow-up was stopped and its partial evidence preserved; it is not a pass. The 2,676-trial suite has never been executed.
+
+The nine script-validation trials record 170,877 ms of trial execution in total (about 2 minutes 51 seconds), with individual trials taking 10–28 seconds. The combined RPI fixture took about 24½ minutes. Latest custom results combine separate runs, not one short batch. At an assumed one-minute average, 2,676 trials imply 45 hours serially or 11 hours at ideal four-way concurrency; at two minutes, 89 or 22 hours. These are arithmetic scenarios, not a measured full-suite forecast; judges, retries, setup, throttling and unsupported cases add uncertainty. Representative agent/skill/instruction groups still need measurements if the user later authorizes broader cost calibration.
+
+The original nine-trial script-validation selection completed on official WSL Codex with Luna Max: all nine passed. Vally's recorded usage totals 459,894 input tokens, including 308,736 cached input tokens, and 7,027 output tokens. Evidence is `.cache/wsl-vally-script-live-20261013/usage-summary.json`. These small static-graded tasks do not represent delegated RPI or judge workloads, and no reliable Codex-credit conversion is available. At that checkpoint the broader custom selections blocked on the missing standard-host judge; the backend described below now supplies it without removing required graders.
+
+## Current authorized run — 2026-10-13
+
+The user approved longer custom deadlines and synthetic Git history. The four 1,200-second trials finished: branch review, PRD/BRD drafting and source promotion planning passed every component grader; RPI timed out without a grade. The fresh RPI retry then passed all ten original graders in about 24½ minutes with a verified private Python test runtime and a 3,600-second deadline. The two 1,800-second gate checks also finished: design-thinking passes all four graders; synthetic analysis fails completion after the scanner rejects the agent's traversal-containing input path. All use official WSL Codex and Luna Max. The branch fixture creates two local synthetic commits through Vally's standard environment setup; it has no remote. Original upstream definitions, prompts, graders and scoring remain unchanged. No paid selection remains running, and the full 2,676-trial suite has not been executed.
+
+Preparation and preservation evidence: `.cache/vally-authorized-1200s-preparation.json`, `.cache/custom-1200s-preservation.json`, and `.cache/native-review-materialization-verification.json`. Terminal results: `.cache/wsl-vally-remaining-1200s-20261013/`; independent review: `.cache/remaining-1200s-first-three-reviewed.json`. Historical checkpoints below retain their original outcomes.
+
+These longer-deadline selections record 34,771,018 input tokens (32,757,760 cached) and 636,210 output tokens across 18 completed parent turns and six completed judge calls, including failed trials. This excludes unfinished turns, unreported child usage and the earlier selections. Actual credits remain unavailable; token counts are not credit charges. Evidence: `.cache/long-deadline-recorded-usage.json`. RPI is substantially heavier than the script-validation tasks, so their costs must not be extrapolated interchangeably.
+
+## Official Codex Vally judge backend (2026-10-13)
+
+The user accepted exact judge tool isolation as an unverified limitation and asked to continue. `vally-run --judge-backend codex` now injects a stock app-server `LlmClient` into the original Vally prompt and panel graders. It preserves original rubrics, verdict schemas, reminders, trials and scoring; effective Luna Max identity and selected-backend provenance are recorded separately from generic Vally effort settings. No Codex fork or replacement test engine is used.
+
+The synthetic WSL pilot completed with native `view`, `grep`, and `submit_grade` calls, a schema-valid passing verdict, no reminders, untruncated audit and confirmed owned-transport closure. Usage: 36,575 input tokens (18,176 cached), 443 output tokens. These are token counts, not a credit charge. Evidence: `.cache/wsl-judge-pilot-20261013/`. All current selections have finished: ten custom trials yield five passes, two grading failures and three timeouts. Branch-review awaits synthetic-history authorization; a proposal to extend three custom deadlines awaits the user's preference. Current results are tracked in [validation](validation.md).
+
+Final offline checks pass 356 Python tests plus 211 subtests (five skips), and 200 Node tests (one Windows symlink skip). Judge checks cover file snapshots, duplicate verdicts, interruption and cleanup. Exact native tool exposure remains unverified even though the selected evidence handlers enforce read-only path and resource budgets.
+
+The first judged edge attempt exposed incomplete custom fixtures. RPI timed out in its Plan phase because Plan/Implement skills were not staged. Review and RAI executed and were graded by the original Vally prompt grader, which reported missing required guidance and absent deliverables. The queue was stopped; it had already advanced to a fourth case, whose partial trace is retained without a completed grade. No eval process remains active. Correcting custom environment declarations does not change original upstream tests, graders, rubrics or scoring. Saved evidence: `.cache/wsl-vally-custom-judged-20261013/`.
+
+Recorded usage for completed task turns and judge audits: 2,455,025 input tokens, including 2,085,120 cached input tokens, plus 71,431 output tokens. This is incomplete usage: unfinished turns and unreported child sessions may add cost. Actual credits are unavailable. See `recorded-usage-summary.json` in that evidence directory. The failing attempt is not relabeled as a pass.
+
+The corrected v2/v4 selections separately record 7,809,375 input tokens (6,594,560 cached) and 232,224 output tokens across 18 completed parent turns and seven completed judge calls. This excludes the first stopped queue, host checks, script-validation, unfinished turns and any unreported child usage. These are measurements rather than a full-suite credit estimate. Evidence: `.cache/judged-edge-current-usage.json`. No further paid retries are running; the longer custom-deadline choice remains pending.

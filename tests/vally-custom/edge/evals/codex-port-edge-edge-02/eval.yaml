@@ -1,0 +1,69 @@
+name: codex-port-edge-edge-path-02
+description: Original edge edge-path-02 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 1200s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-02-code-review
+    turns:
+      - Launch .github/agents/coding-standards/code-review.agent.md
+      - Invoke .github/agents/coding-standards/code-review.agent.md to review src/profile_preferences.py. Delegate to .github/agents/privacy/privacy-reviewer.agent.md and .github/agents/accessibility/accessibility-reviewer.agent.md only as current review procedure requires. Use the source-defined branch review folder and pause at orientation confirmation before detailed findings or final review. Do not edit source or check human review.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-02
+      legacy_title: Read-only review orientation and confirmation pause
+      prompt_only_checks:
+        - gate
+        - source-recovery
+    rubric:
+      - Uses current review roles and exact evidence; unavailable reviews are stated.
+      - Source stays read-only and human approval unchecked.
+      - Before confirmation, records the orientation walkthrough and diff state in the branch review folder, presents the Dispatch board, Recommended perspectives, and Recommended depth in the response, then pauses without writing a final findings report or dispatching unconfirmed perspectives. The confirmed choices and canonical dispatch manifest are persisted after confirmation.
+    graders:
+      - type: prompt
+        name: judge-edge-path-02
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: orientation-walkthrough
+        config:
+          path: .copilot-tracking/reviews/code-reviews/*/orientation-walkthrough.md
+      - type: file-exists
+        name: diff-state
+        config:
+          path: .copilot-tracking/reviews/code-reviews/*/diff-state.json
+      - type: diff-not-contains
+        name: read-only
+        config:
+          pattern: (?m)^diff --git a/(?:src/profile_preferences\.py) b/
+    agent_environment:
+      commands:
+        - node .codex/setup-review-history.mjs
+      commandTimeout: 120s
+      skills:
+        - ../../.github/skills/coding-standards/code-review
+        - ../../.github/skills/shared/pr-reference
+      files:
+        - src: fixtures/setup-review-history.mjs
+          dest: .codex/setup-review-history.mjs
+        - src: ../../.github/agents/coding-standards/code-review.agent.md
+          dest: .github/agents/coding-standards/code-review.agent.md
+        - src: ../../.github/skills/coding-standards/code-review/SKILL.md
+          dest: .github/skills/coding-standards/code-review/SKILL.md
+        - src: ../../.github/skills/shared/pr-reference/SKILL.md
+          dest: .github/skills/shared/pr-reference/SKILL.md
+        - src: ../../.github/instructions/coding-standards/code-review/diff-computation.instructions.md
+          dest: .github/instructions/coding-standards/code-review/diff-computation.instructions.md
+        - src: ../../.github/agents/privacy/privacy-reviewer.agent.md
+          dest: .github/agents/privacy/privacy-reviewer.agent.md
+        - src: ../../.github/agents/accessibility/accessibility-reviewer.agent.md
+          dest: .github/agents/accessibility/accessibility-reviewer.agent.md
+        - src: fixtures/src/profile_preferences.py
+          dest: src/profile_preferences.py

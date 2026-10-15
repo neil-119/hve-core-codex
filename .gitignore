@@ -1,0 +1,36 @@
+.cache/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+node_modules/
+logs/
+runtime-results/
+pytest-of-*/
+# Generated distributions and upstream copies belong outside this source repo.
+/plugins/
+/codex-overlay/
+/generated/
+/.agents/plugins/
+/build/
+
+# Local credentials, editor state, and scratch outputs.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+/tmp/
+/tmp-*/
+/temp/
+/.codex/

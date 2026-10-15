@@ -1,0 +1,455 @@
+{
+  "schema_version": 1,
+  "description": "Native edge integration acceptance: implicit selection, explicit-only isolation, trusted hook delivery, and named research delegation. No runtime pass is inferred from preparation.",
+  "scenarios": [
+    {
+      "id": "edge-integration-01",
+      "key": "implicit-research-selection",
+      "title": "Research task selects the installed workflow without an explicit skill mention",
+      "invocation_mode": "implicit",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/skills/rpi/rpi-research/SKILL.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/skills/rpi/rpi-research/SKILL.md"
+      ],
+      "prompts": [
+        "Research how to add an optional retry limit to the Python importer in this project. Inspect the code, compare approaches, and write a research artifact for implementation planning using the appropriate installed workflow. Research only; do not implement or edit the importer. Leave all human approval boxes unchecked."
+      ],
+      "rubric": [
+        "The prompt contains no explicit skill invocation. Observable file-read/tool evidence shows Codex selected the relevant installed research skill, directly or through the HVE catalog, and read its procedure.",
+        "Produces evidence-based research under the source-defined tracking convention while leaving the importer unchanged.",
+        "Skill selection is recorded from observable events, not inferred solely from a final answer or artifact filename."
+      ],
+      "fixture_files": {
+        "src/importer.py": "def import_rows(rows):\n    return [row for row in rows if row]\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "research-input-present",
+          "kind": "fixture_exists",
+          "path": "src/importer.py"
+        },
+        {
+          "id": "source-remains-read-only",
+          "kind": "workspace_file_unchanged",
+          "path": "src/importer.py"
+        },
+        {
+          "id": "research-artifact",
+          "kind": "workspace_glob_exists",
+          "path": ".copilot-tracking/research/**/*.md"
+        },
+        {
+          "id": "implicit-skill-selection-observed",
+          "kind": "implicit_skill_selection",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-02",
+      "key": "explicit-only-negative-routing",
+      "title": "An unrelated task does not activate an explicit-only external workflow",
+      "invocation_mode": "implicit",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/agents/project-planning/backlog-manager.agent.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/agents/project-planning/backlog-manager.agent.md"
+      ],
+      "prompts": [
+        "Read notes.txt and tell me how many nonempty lines it contains. This is a local counting task. Do not edit files or contact external services."
+      ],
+      "rubric": [
+        "Returns the correct count of two using the local fixture.",
+        "No explicit-only backlog workflow or delegated backlog role is activated; inspect the complete tool trace rather than accepting a statement of non-invocation.",
+        "No files are edited and no connector or external-write operation is attempted."
+      ],
+      "fixture_files": {
+        "notes.txt": "alpha\n\nbeta\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "count-input-present",
+          "kind": "fixture_exists",
+          "path": "notes.txt"
+        },
+        {
+          "id": "input-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "notes.txt"
+        },
+        {
+          "id": "no-inappropriate-skill-selection",
+          "kind": "negative_skill_selection",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-03",
+      "key": "trusted-hooks-native-positive-negative-resume",
+      "title": "Trusted native hooks deliver only matching context, including after resume",
+      "source_artifacts": [
+        ".github/copilot-instructions.md"
+      ],
+      "prompts": [
+        "Read src/app.py directly and describe what its function returns. The file exists; no directory listing is needed. Do not edit files. Do not read the rule registry or hook script to obtain an answer. Apply any guidance supplied by the host. If the file read fails, report the failure and stop without retries or alternate tools.",
+        "Inspect docs/notes.txt and describe its contents. Do not edit files or read the rule registry. Apply only guidance relevant to this target.",
+        "Resume by reading src/app.py directly again. Do not edit files or read the rule registry. Apply guidance relevant to this target. If the file read fails, report the failure and stop without retries or alternate tools."
+      ],
+      "rubric": [
+        "Before starting, review and trust the installed hooks in the disposable project. Capture host evidence of trust and event delivery without bypassing review.",
+        "SessionStart delivers the session-general rule. PreToolUse supplies the Python rule when the actual tool targets src/app.py, even though the initial prompt contains no explicit filename.",
+        "The Python rule is absent from context newly delivered for docs/notes.txt. Its sentinel may remain in conversation history; that is not a new injection.",
+        "Relevant guidance is delivered again when needed after resume, without duplicate suppression losing a later turn's context.",
+        "The output markers support the trace but do not replace host-event and additional-context evidence. Missing host instrumentation remains unverified."
+      ],
+      "fixture_files": {
+        "src/app.py": "def greeting():\n    return 'hello'\n",
+        "docs/notes.txt": "Documentation fixture.\n",
+        "rules/index.json": {
+          "version": 1,
+          "rules": [
+            {
+              "id": "integration-general",
+              "source": "general.instructions.md",
+              "path": "general.md",
+              "apply_to": [],
+              "precedence": 0,
+              "imports": []
+            },
+            {
+              "id": "integration-python",
+              "source": "python.instructions.md",
+              "path": "python.md",
+              "apply_to": [
+                "src/**/*.py",
+                "!src/generated/**"
+              ],
+              "precedence": 10,
+              "imports": []
+            }
+          ]
+        },
+        "rules/general.md": "When reporting on this fixture, include SESSION_GUIDANCE_OBSERVED.\n",
+        "rules/python.md": "When reporting on a matching Python target, include PYTHON_GUIDANCE_OBSERVED.\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "hook-rules-selection",
+          "kind": "staged_rules_match",
+          "expected_by_path": {
+            "src/app.py": [
+              "integration-general",
+              "integration-python"
+            ],
+            "src/generated/app.py": [
+              "integration-general"
+            ],
+            "docs/notes.txt": [
+              "integration-general"
+            ]
+          }
+        },
+        {
+          "id": "python-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "src/app.py"
+        },
+        {
+          "id": "documentation-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "docs/notes.txt"
+        },
+        {
+          "id": "native-hook-delivery",
+          "kind": "native_hook_context",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-04",
+      "key": "delegated-native-role-and-hook-context",
+      "title": "A delegated custom role starts with its intended instructions and hook context",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/skills/rpi/rpi-research/SKILL.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/skills/rpi/rpi-research/SKILL.md",
+        ".github/agents/hve-core/subagents/rpi-researcher.agent.md"
+      ],
+      "prompts": [
+        "Invoke $actual-entrypoint for read-only research of src/app.py. Delegate the inspection to the installed rpi-researcher custom role, ask it to report relevant project guidance and findings, wait for its real result, and summarize it. Do not implement changes, invent a subagent response, or inspect the hook script or rule registry for fixture markers."
+      ],
+      "rubric": [
+        "Observable spawn/start evidence identifies the installed rpi-researcher role rather than an unnamed generic replacement.",
+        "The child receives the intended developer instructions and SubagentStart hook context; parent-side statements alone are insufficient.",
+        "Delegated results are awaited and aggregated accurately; source and human approvals remain unchanged.",
+        "Parent and delegated sessions use the requested Luna model and effort. Unavailable model or child-usage evidence is reported as incomplete."
+      ],
+      "fixture_files": {
+        "src/app.py": "def greeting():\n    return 'hello'\n",
+        "rules/index.json": {
+          "version": 1,
+          "rules": [
+            {
+              "id": "integration-child",
+              "source": "general.instructions.md",
+              "path": "child.md",
+              "apply_to": [],
+              "precedence": 0,
+              "imports": []
+            }
+          ]
+        },
+        "rules/child.md": "Include CHILD_GUIDANCE_OBSERVED when describing this project's guidance.\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "source-present",
+          "kind": "fixture_exists",
+          "path": "src/app.py"
+        },
+        {
+          "id": "source-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "src/app.py"
+        },
+        {
+          "id": "native-delegation-and-context",
+          "kind": "native_delegation_context",
+          "runtime_required": true
+        }
+      ]
+    },
+    {
+      "id": "edge-integration-05",
+      "key": "explicit-post-choice-problem-space-handoff",
+      "title": "Explicit post-choice Problem Space handoff follows the pinned edge source contract",
+      "variant": "current-edge",
+      "invocation_mode": "explicit",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/agents/design-thinking/dt-coach.agent.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/agents/design-thinking/dt-coach.agent.md",
+        ".github/skills/design-thinking/dt-rpi-integration/SKILL.md",
+        ".github/skills/rpi/rpi-research/SKILL.md",
+        ".github/agents/hve-core/rpi-agent.agent.md"
+      ],
+      "prompts": [
+        "Invoke $actual-entrypoint for the existing synthetic Design Thinking project profile-preferences. I explicitly choose the lateral Problem Space handoff to RPI now. Follow the currently packaged DT-to-RPI integration procedure for project-slug=profile-preferences. Methods 1, 2, and 3 are complete, and the state contains no earlier handoff choice. Use only the supplied synthetic fixture files; label the resulting outputs as synthetic evaluation data and do not present them as real user research. In the handoff summary, include the literal line synthetic_evaluation_data: true in a clearly labeled evaluation note; preserve all source-required frontmatter fields. Create the source-defined handoff summary, RPI entry, and coaching-state transition. Preserve the current target rpi-research in both the summary and transition log, and include the source-compatible DT Artifact Paths section. Stop after preparing the handoff package; announce rpi-research and the paths, but do not begin downstream research, planning, or implementation."
+      ],
+      "rubric": [
+        "The current user prompt explicitly chooses the lateral handoff; the fixture state has completed Methods 1-3 but records no earlier handoff choice.",
+        "The workflow follows the current DT-to-RPI integration procedure, reads the listed Method 1-3 artifacts, and does not invent evidence beyond the labeled synthetic fixture.",
+        "Creates .copilot-tracking/dt/profile-preferences/handoff-summary.md with exit_point problem-statement-complete, dt_method 3, dt_space problem, and handoff_target \"rpi-research\"; includes Artifacts, Constraints, and Assumptions with confidence markers.",
+        "Appends a lateral transition from_method 3 to rpi-research with the source-defined rationale while preserving methods_completed and artifact records.",
+        "Creates .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md with Problem Statement, Stakeholder Context, Research Themes, Constraints, Investigation Targets, and Coaching Notes; includes the source-compatible DT Artifact Paths section.",
+        "Announces rpi-research as the receiving phase and gives the handoff path; distinguishes that phase from the rpi-agent coordinator and does not claim downstream research, planning, or implementation ran.",
+        "Writes only the source-defined Design Thinking handoff outputs under .copilot-tracking/dt/profile-preferences/."
+      ],
+      "fixture_files": {
+        ".copilot-tracking/dt/profile-preferences/coaching-state.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only\n\nproject:\n  name: \"Synthetic Profile Preferences\"\n  slug: \"profile-preferences\"\n  created: \"2026-10-10\"\n  initial_request: \"[SYNTHETIC EVAL FIXTURE] Add a profile-preferences page so employees can change notification cadence and display settings.\"\n  initial_classification: \"fluid\"\n\ncurrent:\n  method: 3\n  space: \"problem\"\n  phase: \"Problem Space exit readiness\"\n  disclaimerShownAt: \"2026-10-10T12:00:00Z\"\n\nmethods_completed:\n  - 1\n  - 2\n  - 3\n\ntransition_log:\n  - from_method: null\n    to_method: 1\n    rationale: \"[SYNTHETIC EVAL FIXTURE] Project initialized.\"\n    date: \"2026-10-10\"\n  - from_method: 1\n    to_method: 2\n    rationale: \"[SYNTHETIC EVAL FIXTURE] Scope and stakeholders were recorded.\"\n    date: \"2026-10-10\"\n  - from_method: 2\n    to_method: 3\n    rationale: \"[SYNTHETIC EVAL FIXTURE] Scripted research inputs were synthesized.\"\n    date: \"2026-10-10\"\n\nhint_calibration:\n  level: 1\n  pattern_notes: \"\"\n\nsession_log:\n  - date: \"2026-10-10\"\n    method: 3\n    summary: \"[SYNTHETIC EVAL FIXTURE] Methods 1-3 are complete; no lateral handoff choice has been recorded before the current user request.\"\n\nartifacts:\n  - path: \".copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md\"\n    method: 1\n    type: \"stakeholder-map\"\n  - path: \".copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md\"\n    method: 1\n    type: \"assumptions-log\"\n  - path: \".copilot-tracking/dt/profile-preferences/method-02-research-plan.md\"\n    method: 2\n    type: \"research-plan\"\n  - path: \".copilot-tracking/dt/profile-preferences/method-02-research-notes.md\"\n    method: 2\n    type: \"interview-notes\"\n  - path: \".copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md\"\n    method: 3\n    type: \"synthesis-themes\"\n  - path: \".copilot-tracking/dt/profile-preferences/method-03-problem-definition.md\"\n    method: 3\n    type: \"problem-definition\"\n",
+        ".copilot-tracking/dt/profile-preferences/method-01-stakeholder-map.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 1 stakeholder map\n\nThis file contains fictional acceptance-test data, not real stakeholder research.\n\n| Stakeholder | Synthetic need or perspective |\n|---|---|\n| Employee changing profile preferences | Wants to know whether a change saved and where keyboard focus moved. |\n| Service-desk specialist | Needs fewer repeat contacts caused by uncertainty after a preference update. |\n| Accessibility partner | Wants keyboard and screen-reader feedback considered in the workflow. |\n\n## Scope\nIn scope: editing notification cadence and display preferences in the profile workflow. Out of scope: account recovery, role administration, and production implementation.\n",
+        ".copilot-tracking/dt/profile-preferences/method-01-assumptions-and-constraints.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 1 scope and assumptions\n\nThese are fictional fixture statements, not facts about a real product or team.\n\n## Boundaries\n- Explore the problem behind the request to add a profile-preferences page.\n- Do not design or implement the page in this Problem Space fixture.\n\n## Assumptions\n- Preference edits should be possible using keyboard navigation: assumed, medium impact.\n- The existing product can persist the chosen preferences: assumed, medium impact.\n\n## Environmental and workflow constraints\n- The synthetic task must remain completable without pointer input: assumed.\n- Confirmation should be perceivable to keyboard and screen-reader users: assumed.\n",
+        ".copilot-tracking/dt/profile-preferences/method-02-research-plan.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 2 research plan\n\nThis is a scripted synthetic exercise, not a real research plan that was executed with participants.\n\n## Research questions\n1. Can a keyboard user tell that a preference update completed?\n2. Does focus remain understandable after saving?\n3. What follow-up information would help service-desk staff explain the saved state?\n\n## Synthetic inputs\nUse the employee, service-desk, and accessibility-partner perspectives in the paired fixture notes. Treat all resulting findings as assumptions for downstream verification, not empirical validation.\n",
+        ".copilot-tracking/dt/profile-preferences/method-02-research-notes.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 2 notes\n\nNo real interviews or observations occurred. The following scripted inputs exist only to make the acceptance fixture coherent.\n\n- Synthetic employee task: after submitting a preference change, the page gives no clear confirmation and keyboard focus returns to the top of the form.\n- Synthetic service-desk case: a user contacts support again because they cannot tell whether the preference was saved.\n- Synthetic accessibility review prompt: the success state should be announced and the edited control should remain easy to locate.\n",
+        ".copilot-tracking/dt/profile-preferences/method-03-synthesis-themes.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 3 synthesis themes\n\nThe themes below are derived only from the scripted synthetic inputs above.\n\n## Affinity clusters\n- Completion uncertainty: the employee cannot tell whether the change persisted; the service-desk case repeats that uncertainty.\n- Focus continuity: the keyboard task loses its place after submit; the accessibility review calls for a perceivable, locatable result.\n\n## Insights\n- In this synthetic scenario, unclear completion feedback links the editing experience to avoidable support follow-up. Confidence: assumed, because the inputs are fictional.\n- A clear result and stable focus are shared workflow needs across the employee and accessibility perspectives. Confidence: assumed, because the inputs are fictional.\n",
+        ".copilot-tracking/dt/profile-preferences/method-03-problem-definition.md": "<!-- markdownlint-disable-file -->\n# Synthetic evaluation fixture only: Method 3 problem definition\n\n## Problem definition\nIn this synthetic scenario, employees changing profile preferences cannot reliably tell whether an update was saved or where to continue, which can lead to repeated edits and support follow-up. This is a problem framing behind the initial solution request to add a profile-preferences page; it does not prescribe a design.\n\n## How might we\nHow might we help people confidently confirm and resume profile-preference edits without losing their place or repeating an update?\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "handoff-summary-absent-before-run",
+          "kind": "fixture_absent",
+          "path": ".copilot-tracking/dt/profile-preferences/handoff-summary.md"
+        },
+        {
+          "id": "rpi-entry-absent-before-run",
+          "kind": "fixture_absent",
+          "path": ".copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md"
+        },
+        {
+          "id": "state-updated-after-explicit-choice",
+          "kind": "fixture_hash_at_turn",
+          "path": ".copilot-tracking/dt/profile-preferences/coaching-state.md",
+          "after_prompt": 1,
+          "expected_status": "modified"
+        },
+        {
+          "id": "handoff-summary-created",
+          "kind": "workspace_file_exists",
+          "path": ".copilot-tracking/dt/profile-preferences/handoff-summary.md"
+        },
+        {
+          "id": "rpi-entry-created",
+          "kind": "workspace_file_exists",
+          "path": ".copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md"
+        },
+        {
+          "id": "summary-target",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/handoff-summary.md",
+          "text": "handoff_target: \"rpi-research\""
+        },
+        {
+          "id": "lateral-transition",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/coaching-state.md",
+          "text": "to: \"rpi-research\""
+        },
+        {
+          "id": "rpi-problem-statement-section",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md",
+          "text": "## Problem Statement"
+        },
+        {
+          "id": "rpi-target-section",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md",
+          "text": "## Investigation Targets"
+        },
+        {
+          "id": "synthetic-label-in-summary",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/handoff-summary.md",
+          "text": "synthetic_evaluation_data: true"
+        },
+        {
+          "id": "source-provenance-recovered",
+          "kind": "source_artifact_recovery",
+          "sources": [
+            ".github/agents/design-thinking/dt-coach.agent.md",
+            ".github/skills/design-thinking/dt-rpi-integration/SKILL.md",
+            ".github/skills/rpi/rpi-research/SKILL.md",
+            ".github/agents/hve-core/rpi-agent.agent.md"
+          ]
+        },
+        {
+          "id": "dt-artifact-paths-section",
+          "kind": "workspace_file_contains",
+          "path": ".copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md",
+          "text": "## DT Artifact Paths"
+        }
+      ],
+      "fixture_provenance": {
+        "classification": "synthetic-evaluation-only",
+        "upstream_sha": "49dfb73866f8c5f81bf734d6ca808dac25a2a330",
+        "source_artifacts": [
+          ".github/agents/design-thinking/dt-coach.agent.md",
+          ".github/skills/design-thinking/dt-rpi-integration/SKILL.md",
+          ".github/skills/rpi/rpi-research/SKILL.md",
+          ".github/agents/hve-core/rpi-agent.agent.md"
+        ],
+        "note": "All coaching state and Methods 1-3 artifacts in fixture_files are synthetic. No real interviews, observations, or user research occurred."
+      }
+    },
+    {
+      "id": "edge-integration-06",
+      "key": "data-science-coach",
+      "title": "Resumed synthetic analysis with explicit question and notebook authorization",
+      "entrypoints": [
+        {
+          "id": "primary",
+          "source": ".github/agents/data-science-engineering/data-science-engineering-coach.agent.md"
+        },
+        {
+          "id": "analysis",
+          "source": ".github/skills/data-science-engineering/analysis-authoring/SKILL.md"
+        },
+        {
+          "id": "foundation",
+          "source": ".github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md"
+        },
+        {
+          "id": "durable-write-scan",
+          "source": ".github/skills/project-planning/adr-author/SKILL.md"
+        }
+      ],
+      "source_artifacts": [
+        ".github/agents/data-science-engineering/data-science-engineering-coach.agent.md",
+        ".github/skills/data-science-engineering/analysis-authoring/SKILL.md",
+        ".github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md",
+        ".github/skills/project-planning/adr-author/SKILL.md"
+      ],
+      "prompts": [
+        "Invoke $actual-entrypoint for the current data-science-and-engineering coach. I reviewed the supplied session state and explicitly choose to continue its current analysis job as a new invocation; do not switch jobs. Follow $entrypoint[analysis], $entrypoint[foundation], and $entrypoint[durable-write-scan]. The analysis question is: for week 1, what is the mean observed retention_pct across cohorts, and how many of the three cohort rows are missing retention_pct? The audience is a product analytics reviewer. Use only data/retention.csv and the supplied synthetic data profile and objectives. The deliverable shape is one Jupyter notebook only, at docs/data/retention-analysis.ipynb; docs/data is the confirmed local output root, and I authorize this local notebook. The dataset and results are synthetic. Do not impute the blank value or infer trends, causality, or real-world behavior. Follow the analysis-authoring notebook sequence and all source gates. Before EACH durable artifact write, including the notebook and the required coach state/artifact update, assemble that artifact's exact proposed content in a contained scratch file and run the packaged adr-author scanner with --data against that exact file. Apply the same gates to every such artifact: accept the write only when the JSON report has status=completed, modes.data=true, and summary.high=0. If warning findings remain without a high finding, surface their category and location and wait for my decision before that write. If the state is invalid or mismatched, the scanner is unavailable, or the report errors or contains a high finding, do not perform that write; stop and report the blocker. After each passing scan, write only the exact scanned content to that artifact's authorized local path. Keep scratch files contained, and do not use external services or install packages."
+      ],
+      "rubric": [
+        "Resumes the existing synthetic state, announces the active analysis job and relevant state before execution, and does not initialize a new project or silently change jobs.",
+        "Uses analysis-authoring, references the supplied profile and objectives, follows the notebook completeness guidance, and describes the question, data, missingness, observed-data limitation, and next step without unsupported interpretation.",
+        "Computes the requested observed arithmetic mean and denominator from the three supplied rows, reports the missing-row count, and does not impute or infer a trend or causal result.",
+        "Before every durable artifact write (notebook and required coach state/artifact update), runs the packaged scan_sensitive_content.py with --data against that artifact's exact proposed content and requires status=completed, modes.data=true, and summary.high=0; surfaces any warning category and location and waits for the user's decision before that write; if scanning errors or reports a high finding, performs no corresponding write and reports the blocker. Each successful write contains only the exact scanned content at its authorized local path; scratch stays contained and no external service or package installation is used.",
+        "Writes only the explicitly authorized local notebook and required coach state/artifact update; leaves the input dataset and installed/source artifacts unchanged."
+      ],
+      "fixture_files": {
+        "data/retention.csv": "cohort,week,retention_pct\nA,1,72\nB,1,\nC,1,68\n",
+        "data/retention-profile.md": "# Synthetic retention data profile\n\n- This fixture is synthetic and does not describe a real population.\n- Grain: one row per cohort for week 1.\n- `retention_pct` is a percentage from 0 to 100.\n- A blank `retention_pct` cell means missing.\n- No imputation or cohort-level causal interpretation is authorized.\n",
+        "docs/data/objectives.md": "# Synthetic analysis objective\n\nFor a product analytics reviewer, report the observed week-1 arithmetic mean and missing-row count for the supplied retention dataset. Do not infer cohort trends or causal effects.\n",
+        ".copilot-tracking/ds/retention-analysis/session-state.md": "# Synthetic session state\n\n```yaml\nschema_version: data-workstream-session-v1\nproject:\n  name: Synthetic retention analysis\n  slug: retention-analysis\n  created_at: \"2026-10-10T09:00:00Z\"\n  customer_output_root: docs/data\ncurrent:\n  job: analysis\n  class: episodic\n  phase: null\n  disclaimerShownAt: \"2026-10-10T09:00:00Z\"\njobs:\n  catalog: {class: continuous, status: never, artifact: null, last_enriched_at: null}\n  model-diagram: {class: episodic, status: never, invocations: []}\n  problem-framing: {class: episodic, status: never, invocations: []}\n  feasibility: {class: bounded, status: never, phase: null, phase_gates: {}, artifact: null}\n  pipeline: {class: episodic, status: never, invocations: []}\n  analysis: {class: episodic, status: never, invocations: []}\n  evaluation: {class: episodic, status: never, invocations: []}\n  experiment: {class: episodic, status: never, invocations: []}\n  testing: {class: episodic, status: never, invocations: []}\n  observability: {class: episodic, status: never, invocations: []}\njob_log: []\nsession_log: []\nartifacts: []\ncross_agent_refs: []\n```\n"
+      },
+      "deterministic_checks": [
+        {
+          "id": "dataset-present",
+          "kind": "fixture_exists",
+          "path": "data/retention.csv"
+        },
+        {
+          "id": "profile-present",
+          "kind": "fixture_exists",
+          "path": "data/retention-profile.md"
+        },
+        {
+          "id": "objectives-present",
+          "kind": "fixture_exists",
+          "path": "docs/data/objectives.md"
+        },
+        {
+          "id": "valid-session-state-present",
+          "kind": "fixture_exists",
+          "path": ".copilot-tracking/ds/retention-analysis/session-state.md"
+        },
+        {
+          "id": "notebook-created",
+          "kind": "workspace_file_exists",
+          "path": "docs/data/retention-analysis.ipynb"
+        },
+        {
+          "id": "input-unchanged",
+          "kind": "workspace_file_unchanged",
+          "path": "data/retention.csv"
+        },
+        {
+          "id": "source-unchanged",
+          "kind": "no_source_edit"
+        },
+        {
+          "id": "source-recovery",
+          "kind": "source_artifact_recovery",
+          "sources": [
+            ".github/agents/data-science-engineering/data-science-engineering-coach.agent.md",
+            ".github/skills/data-science-engineering/analysis-authoring/SKILL.md",
+            ".github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md",
+            ".github/skills/project-planning/adr-author/SKILL.md"
+          ]
+        }
+      ]
+    }
+  ]
+}

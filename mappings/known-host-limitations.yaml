@@ -1,0 +1,8 @@
+version: 1
+limitations:
+  - {id: agent-picker, severity: informational, alternative: explicit-entry-point-skill}
+  - {id: handoff-buttons, severity: informational, alternative: named-chat-action}
+  - {id: automatic-invocation-policy, severity: runtime-validation-required, alternative: routing-policy-and-tests}
+  - {id: hidden-manual-skill-invocation, severity: unsupported-host-policy, alternative: preserve-automatic-selection-and-disclose-manual-visibility}
+  - {id: hooks, severity: runtime-validation-required, alternative: explicit-rules-match}
+  - {id: connectors, severity: optional-configuration, alternative: actionable-prerequisite-error}

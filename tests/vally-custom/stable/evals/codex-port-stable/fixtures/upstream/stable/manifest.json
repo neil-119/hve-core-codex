@@ -1,0 +1,19 @@
+{
+  "artifacts": [
+    {
+      "frontmatter": {
+        "description": "Checks policy",
+        "name": "legacy-check"
+      },
+      "path": ".github/skills/legacy-check/SKILL.md",
+      "tools": [
+        "read/file"
+      ]
+    }
+  ],
+  "references": [
+    ".github/skills/legacy-check/SKILL.md"
+  ],
+  "upstream_ref": "hve-core-v3.2.2",
+  "upstream_sha": "e69486a5f809ede45c63c0a31358c12912bd5168"
+}

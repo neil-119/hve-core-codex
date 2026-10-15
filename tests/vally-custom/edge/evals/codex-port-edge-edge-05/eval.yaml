@@ -1,0 +1,52 @@
+name: codex-port-edge-edge-path-05
+description: Original edge edge-path-05 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-05-backlog-read-only
+    turns:
+      - Launch .github/agents/project-planning/backlog-manager.agent.md
+      - Invoke .github/agents/project-planning/backlog-manager.agent.md read-only for backlog/candidates.json. Classify duplicates and write only .copilot-tracking/backlog/profile-preferences/summary.md. Do not mutate a tracker. Later writes must use only the selected platform executor and its gates.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-05
+      legacy_title: Backlog Manager read-only, platform mutations delegated
+      prompt_only_checks:
+        - no-write
+        - source-recovery
+    rubric:
+      - Manager remains structurally read-only across all platforms.
+      - Any mutation is platform-specific and delegated-only; local advisory implies no tracker access.
+    graders:
+      - type: prompt
+        name: judge-edge-path-05
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: advisory
+        config:
+          path: .copilot-tracking/backlog/profile-preferences/summary.md
+    agent_environment:
+      skills:
+        - ../../.github/skills/project-planning/backlog-management
+      files:
+        - src: ../../.github/agents/project-planning/backlog-manager.agent.md
+          dest: .github/agents/project-planning/backlog-manager.agent.md
+        - src: ../../.github/agents/project-planning/subagents/ado-backlog-executor.agent.md
+          dest: .github/agents/project-planning/subagents/ado-backlog-executor.agent.md
+        - src: ../../.github/agents/project-planning/subagents/github-backlog-executor.agent.md
+          dest: .github/agents/project-planning/subagents/github-backlog-executor.agent.md
+        - src: ../../.github/agents/project-planning/subagents/jira-backlog-executor.agent.md
+          dest: .github/agents/project-planning/subagents/jira-backlog-executor.agent.md
+        - src: ../../.github/skills/project-planning/backlog-management/SKILL.md
+          dest: .github/skills/project-planning/backlog-management/SKILL.md
+        - src: fixtures/backlog/candidates.json
+          dest: backlog/candidates.json

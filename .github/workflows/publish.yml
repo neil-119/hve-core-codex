@@ -1,0 +1,444 @@
+name: Publish HVE Core Codex release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Protected publication channel
+        type: choice
+        options:
+        - stable
+        - edge
+        default: stable
+        required: true
+      port_revision:
+        description: Port revision for this upstream version (increment for a new reviewed release)
+        type: string
+        default: "1"
+        required: true
+      confirm_edge_snapshot:
+        description: Explicitly opt in to publishing an edge development snapshot
+        type: boolean
+        default: false
+        required: true
+
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+      port_revision:
+        type: string
+        default: '1'
+      confirm_edge_snapshot:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+
+concurrency:
+  group: hve-codex-publish-${{ inputs.channel || 'stable' }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Skip unchanged or unreviewed sources before release credentials
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.select.outputs.publish }}
+      source_sha: ${{ steps.select.outputs.source_sha }}
+      target_branch: ${{ steps.select.outputs.target_branch }}
+    steps:
+    - name: Check out the reviewed workflow code
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.11'
+    - name: Install locked environment
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.8.22
+        uv sync --locked --all-groups
+    - name: Select only the latest unpublished source on its protected branch
+      id: select
+      env:
+        CHANNEL: ${{ inputs.channel || 'stable' }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_REF: ${{ github.ref }}
+        EVENT_SHA: ${{ github.sha }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: uv run python .github/scripts/weekly_preflight.py
+  release-gate:
+    name: Validate the pinned ${{ inputs.channel }} release evidence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      channel: ${{ steps.gate.outputs.channel }}
+      target_branch: ${{ steps.gate.outputs.target_branch }}
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      is_prerelease: ${{ steps.tag.outputs.is_prerelease }}
+      port_revision: ${{ steps.tag.outputs.port_revision }}
+      source_sha: ${{ needs.preflight.outputs.source_sha }}
+    steps:
+    - name: Check out the merged commit and repository history
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+        ref: ${{ needs.preflight.outputs.source_sha }}
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7.0.0
+      with:
+        python-version: "3.11"
+
+    - name: Install locked environment
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.8.22
+        uv sync --locked --all-groups
+
+    - name: Set up Node for independent evidence verification
+      uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+      with:
+        node-version: "22"
+        package-manager-cache: false
+
+    - name: Install locked Vally verifier dependencies
+      working-directory: vally-executor
+      run: npm ci --ignore-scripts --no-audit --no-fund
+
+    - name: Run release commit tests and lint
+      run: |
+        uv run ruff check src tests
+        uv run pytest -q
+        uv export --locked --all-groups --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/audit-requirements.txt"
+        uv run pip-audit --strict --no-deps --disable-pip -r "$RUNNER_TEMP/audit-requirements.txt"
+
+    - name: Rebuild the exact reviewed source lock outside the checkout
+      env:
+        CHANNEL: ${{ inputs.channel || 'stable' }}
+      run: bash .github/scripts/rebuild_release_distribution.sh "$CHANNEL" "$RUNNER_TEMP/dist"
+
+    - name: Validate external distribution structure without rewriting evidence
+      run: uv run hve-codex validate --output "$RUNNER_TEMP/dist"
+
+    - name: Check branch, channel opt-in, and release eligibility
+      id: gate
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_REF: refs/heads/${{ needs.preflight.outputs.target_branch }}
+        EVENT_SHA: ${{ needs.preflight.outputs.source_sha }}
+        CHANNEL: ${{ inputs.channel || 'stable' }}
+        CONFIRM_PRERELEASE: ${{ inputs.confirm_prerelease || false }}
+        CONFIRM_EDGE: ${{ github.event_name == 'schedule' || inputs.confirm_edge_snapshot || false }}
+      run: |
+        case "$CHANNEL" in
+          stable) target_branch=main ;;
+          prerelease) target_branch=prerelease ;;
+          edge) target_branch=edge ;;
+          *) echo "Unsupported publication channel: $CHANNEL" >&2; exit 1 ;;
+        esac
+        if [ "$EVENT_REF" != "refs/heads/$target_branch" ]; then
+          echo "$CHANNEL publication must run from the protected $target_branch branch." >&2
+          exit 1
+        fi
+        if [ "$(git rev-parse "origin/$target_branch")" != "$EVENT_SHA" ]; then
+          echo "The target branch advanced or this run is stale; dispatch again from its reviewed commit." >&2
+          exit 1
+        fi
+
+        args=(
+          --channel "$CHANNEL"
+          --compatibility-report "$RUNNER_TEMP/dist/generated/compatibility-report.json"
+          --release-manifest "$RUNNER_TEMP/dist/generated/release-manifest.json"
+          --merged-commit "$EVENT_SHA"
+          --protected-branch
+          --root "$RUNNER_TEMP/dist"
+        )
+        case "$CHANNEL" in
+          stable)
+            args+=(--runtime-evidence "$RUNNER_TEMP/dist/generated/runtime-evidence.json")
+            ;;
+          prerelease)
+            if [ "$EVENT_NAME" != workflow_dispatch ] || [ "$CONFIRM_PRERELEASE" != true ]; then
+              echo "Prerelease publication requires a manual run and the explicit confirm_prerelease choice." >&2
+              exit 1
+            fi
+            args+=(--upstream-prerelease --opt-in)
+            ;;
+          edge)
+            if [ "$CONFIRM_EDGE" != true ]; then
+              echo "Edge publication requires weekly scheduling or explicit manual opt-in." >&2
+              exit 1
+            fi
+            args+=(--opt-in)
+            ;;
+        esac
+        uv run hve-codex release eligibility "${args[@]}"
+        {
+          echo "channel=$CHANNEL"
+          echo "target_branch=$target_branch"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Derive a safe immutable publication tag
+      id: tag
+      env:
+        CHANNEL: ${{ steps.gate.outputs.channel }}
+        PORT_REVISION: ${{ inputs.port_revision || '1' }}
+      run: |
+        python - "$RUNNER_TEMP/dist/generated/release-manifest.json" "$CHANNEL" "$PORT_REVISION" "$GITHUB_OUTPUT" <<'PY'
+        import json, re, sys
+        from pathlib import Path
+
+        manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+        channel, revision = sys.argv[2], sys.argv[3]
+        if not re.fullmatch(r"[1-9][0-9]*", revision):
+            raise SystemExit("port_revision must be a positive integer")
+        version = manifest.get("upstream_manifest_version")
+        if channel in {"stable", "prerelease"}:
+            match = re.fullmatch(r"v?([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)", str(version))
+            if not match:
+                raise SystemExit("release manifest does not contain a safe semantic upstream version")
+            stable_core = match.group(1).split("+", 1)[0]
+            if channel == "stable" and (manifest.get("upstream_prerelease") is True or "-" in stable_core):
+                raise SystemExit("stable publication requires a non-prerelease upstream version")
+            if channel == "prerelease" and manifest.get("upstream_prerelease") is not True:
+                raise SystemExit("prerelease manifest is missing upstream prerelease provenance")
+            tag = f"hve-core-v{match.group(1)}-codex.{revision}"
+            is_prerelease = channel == "prerelease"
+        else:
+            source_sha = manifest.get("source", {}).get("sha")
+            if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+                raise SystemExit("edge release manifest must identify a full immutable upstream commit")
+            tag = f"hve-core-edge-{source_sha}-codex.{revision}"
+            is_prerelease = True
+        if not re.fullmatch(r"hve-core-[A-Za-z0-9.+-]+-codex\.[1-9][0-9]*", tag):
+            raise SystemExit("derived publication tag is malformed")
+        with Path(sys.argv[4]).open("a", encoding="utf-8", newline="\n") as output:
+            output.write(f"release_tag={tag}\n")
+            output.write(f"is_prerelease={'true' if is_prerelease else 'false'}\n")
+            output.write(f"port_revision={revision}\n")
+        PY
+
+    needs: preflight
+    if: needs.preflight.outputs.publish == 'true'
+  publish-release:
+    name: Sign and publish the approved ${{ needs.release-gate.outputs.channel }} release
+    needs: release-gate
+    if: needs.release-gate.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: release-${{ needs.release-gate.outputs.channel }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+    - name: Check out the exact validated commit and history
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0   # v7.0.0
+      with:
+        ref: ${{ needs.release-gate.outputs.source_sha }}
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7.0.0
+      with:
+        python-version: "3.11"
+
+    - name: Install locked environment
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.8.22
+        uv sync --locked --all-groups
+
+    - name: Set up Node for independent evidence verification
+      uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+      with:
+        node-version: "22"
+        package-manager-cache: false
+
+    - name: Install locked Vally verifier dependencies
+      working-directory: vally-executor
+      run: npm ci --ignore-scripts --no-audit --no-fund
+
+    - name: Recheck protected branch and eligibility after environment approval
+      env:
+        EVENT_SHA: ${{ needs.release-gate.outputs.source_sha }}
+        TARGET_BRANCH: ${{ needs.release-gate.outputs.target_branch }}
+        CHANNEL: ${{ needs.release-gate.outputs.channel }}
+        CONFIRM_PRERELEASE: ${{ inputs.confirm_prerelease || false }}
+        CONFIRM_EDGE: ${{ github.event_name == 'schedule' || inputs.confirm_edge_snapshot || false }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_REF: ${{ github.ref }}
+        WORKFLOW_SHA: ${{ github.sha }}
+      run: |
+        gh auth setup-git
+        git fetch --no-tags origin "refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+        if [ "$(git rev-parse "origin/$TARGET_BRANCH")" != "$EVENT_SHA" ]; then
+          echo "$TARGET_BRANCH advanced while release approval was pending; review and dispatch its current commit." >&2
+          exit 1
+        fi
+        test -z "$(git status --porcelain)"
+        bash .github/scripts/rebuild_release_distribution.sh "$CHANNEL" "$RUNNER_TEMP/dist"
+        uv run hve-codex validate --output "$RUNNER_TEMP/dist"
+        args=(
+          --channel "$CHANNEL"
+          --compatibility-report "$RUNNER_TEMP/dist/generated/compatibility-report.json"
+          --release-manifest "$RUNNER_TEMP/dist/generated/release-manifest.json"
+          --merged-commit "$EVENT_SHA"
+          --protected-branch
+          --root "$RUNNER_TEMP/dist"
+        )
+        case "$CHANNEL" in
+          stable) args+=(--runtime-evidence "$RUNNER_TEMP/dist/generated/runtime-evidence.json") ;;
+          prerelease)
+            test "$CONFIRM_PRERELEASE" = true
+            args+=(--upstream-prerelease --opt-in)
+            ;;
+          edge)
+            test "$CONFIRM_EDGE" = true
+            args+=(--opt-in)
+            ;;
+          *) echo "Unsupported publication channel: $CHANNEL" >&2; exit 1 ;;
+        esac
+        uv run hve-codex release eligibility "${args[@]}"
+        builder_dir="$(cat "$RUNNER_TEMP/hve-release-builder-$CHANNEL.txt")"
+        bash "$builder_dir/scripts/build.sh" --archive-only --output "$RUNNER_TEMP/dist"
+        uv build --project "$builder_dir" --out-dir "$RUNNER_TEMP/installer"
+        for wheel in "$RUNNER_TEMP/installer/"*.whl; do
+          (cd "$RUNNER_TEMP/installer" && sha256sum "$(basename "$wheel")" > "$(basename "$wheel").sha256")
+        done
+
+        # Recheck latest-source/no-op status with the original trusted workflow code.
+        trusted="$RUNNER_TEMP/release-preflight-adapter"
+        mkdir -p "$trusted"
+        git archive "$WORKFLOW_SHA" src | tar -x -C "$trusted"
+        git show "$WORKFLOW_SHA:.github/scripts/weekly_preflight.py" > "$trusted/preflight.py"
+        selection="$RUNNER_TEMP/release-selection"
+        GITHUB_OUTPUT="$selection" PYTHONPATH="$trusted/src" uv run --project "$PWD" --locked python "$trusted/preflight.py"
+        if ! grep -qx 'source_sha='"$EVENT_SHA" "$selection"; then
+          echo "The protected branch advanced during release preflight." >&2
+          exit 1
+        fi
+        if grep -qx 'publish=true' "$selection"; then
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+        fi
+
+      id: recheck
+    - name: Attest the reviewed manifest and checksums
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6   # v4.2.2
+      with:
+        subject-path: |
+          ${{ runner.temp }}/dist.zip
+          ${{ runner.temp }}/dist.zip.sha256
+          ${{ runner.temp }}/installer/*.whl
+          ${{ runner.temp }}/installer/*.whl.sha256
+          ${{ runner.temp }}/dist.tar.gz
+          ${{ runner.temp }}/dist.tar.gz.sha256
+          ${{ runner.temp }}/dist/generated/release-manifest.json
+          ${{ runner.temp }}/dist/generated/checksums.txt
+          release/${{ needs.release-gate.outputs.channel }}/source-lock.json
+
+      if: steps.recheck.outputs.publish == 'true'
+    - name: Mint a short-lived release-only GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1   # v3.2.0
+      with:
+        app-id: ${{ secrets.HVE_RELEASE_APP_ID }}
+        private-key: ${{ secrets.HVE_RELEASE_APP_PRIVATE_KEY }}
+        permission-contents: write
+
+      if: steps.recheck.outputs.publish == 'true'
+    - name: Import the release signing key
+      env:
+        HVE_RELEASE_GPG_PRIVATE_KEY: ${{ secrets.HVE_RELEASE_GPG_PRIVATE_KEY }}
+        HVE_RELEASE_GPG_KEY_ID: ${{ secrets.HVE_RELEASE_GPG_KEY_ID }}
+        HVE_RELEASE_GPG_PASSPHRASE: ${{ secrets.HVE_RELEASE_GPG_PASSPHRASE }}
+      run: |
+        printf '%s' "$HVE_RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+        actual_fingerprint="$(gpg --batch --with-colons --list-secret-keys "$HVE_RELEASE_GPG_KEY_ID" | awk -F: '$1 == "fpr" { print $10; exit }')"
+        if [ "${actual_fingerprint^^}" != "${HVE_RELEASE_GPG_KEY_ID^^}" ]; then
+          echo "Imported signing key fingerprint does not match HVE_RELEASE_GPG_KEY_ID." >&2
+          exit 1
+        fi
+        cat > "$RUNNER_TEMP/gpg-sign-wrapper" <<'SH'
+        #!/usr/bin/env bash
+        exec gpg --batch --pinentry-mode loopback --passphrase "$HVE_RELEASE_GPG_PASSPHRASE" "$@"
+        SH
+        chmod 700 "$RUNNER_TEMP/gpg-sign-wrapper"
+        git config user.name "HVE Core Codex Release Bot"
+        git config user.email "hve-core-codex-release[bot]@users.noreply.github.com"
+        git config user.signingkey "$HVE_RELEASE_GPG_KEY_ID"
+        git config gpg.program "$RUNNER_TEMP/gpg-sign-wrapper"
+
+      if: steps.recheck.outputs.publish == 'true'
+    - name: Create or verify the signed immutable tag and GitHub release
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        GH_REPO: ${{ github.repository }}
+        RELEASE_TAG: ${{ needs.release-gate.outputs.release_tag }}
+        IS_PRERELEASE: ${{ needs.release-gate.outputs.is_prerelease }}
+        CHANNEL: ${{ needs.release-gate.outputs.channel }}
+        EVENT_SHA: ${{ needs.release-gate.outputs.source_sha }}
+        HVE_RELEASE_GPG_PASSPHRASE: ${{ secrets.HVE_RELEASE_GPG_PASSPHRASE }}
+        TARGET_BRANCH: ${{ needs.release-gate.outputs.target_branch }}
+      run: |
+        gh auth setup-git
+        git fetch --no-tags origin "refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+        test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EVENT_SHA"
+        tag_ref="refs/tags/$RELEASE_TAG"
+        if git ls-remote --exit-code --refs origin "$tag_ref" >/dev/null 2>&1; then
+          git fetch --no-tags origin "$tag_ref:$tag_ref"
+          git verify-tag "$RELEASE_TAG"
+          tag_target="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          if [ "$tag_target" != "$EVENT_SHA" ]; then
+            echo "Existing signed tag $RELEASE_TAG points to $tag_target, not $EVENT_SHA. Never rewrite it; choose a new port revision." >&2
+            exit 1
+          fi
+        else
+          git tag -s -m "HVE Core Codex $CHANNEL release $RELEASE_TAG" "$RELEASE_TAG" "$EVENT_SHA"
+          git push origin "$tag_ref"
+        fi
+        if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+          actual_prerelease="$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json isPrerelease --jq '.isPrerelease')"
+          if [ "$actual_prerelease" != "$IS_PRERELEASE" ]; then
+            echo "Existing GitHub release has the wrong prerelease status; refusing to mutate it." >&2
+            exit 1
+          fi
+          echo "The signed tag and GitHub release already exist for this exact commit; publication is idempotent." >> "$GITHUB_STEP_SUMMARY"
+        else
+          prerelease_flag=()
+          if [ "$IS_PRERELEASE" = true ]; then prerelease_flag+=(--prerelease); fi
+          assets=(
+            "$RUNNER_TEMP/dist.zip"
+            "$RUNNER_TEMP/dist.zip.sha256"
+            "$RUNNER_TEMP/installer/"*.whl
+            "$RUNNER_TEMP/installer/"*.whl.sha256
+            "$RUNNER_TEMP/dist.tar.gz"
+            "$RUNNER_TEMP/dist.tar.gz.sha256"
+            "$RUNNER_TEMP/dist/generated/release-manifest.json"
+            "$RUNNER_TEMP/dist/generated/checksums.txt"
+            "release/$CHANNEL/source-lock.json"
+          )
+          if [ -f "release/$CHANNEL/runtime-evidence.json" ]; then
+            assets+=("release/$CHANNEL/runtime-evidence.json")
+          fi
+          gh release create "$RELEASE_TAG" \
+            --repo "$GH_REPO" \
+            --target "$EVENT_SHA" \
+            --title "$RELEASE_TAG" \
+            --notes "$CHANNEL HVE Core for Codex. See the attached manifest and checksums for immutable upstream provenance. Stable releases require explicitly invoked CLI and Desktop runtime evidence." \
+            "${prerelease_flag[@]}" \
+            "${assets[@]}"
+        fi
+      if: steps.recheck.outputs.publish == 'true'

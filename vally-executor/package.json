@@ -1,0 +1,9 @@
+{
+  "name": "@hve-core-codex/vally-executor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {"test": "node --test"},
+  "peerDependencies": {"@microsoft/vally": "0.17.0", "zod": "4.6.5"}
+}

@@ -1,0 +1,29 @@
+{
+  "artifacts": [
+    {
+      "frontmatter": {
+        "description": "Checks policy and retries",
+        "name": "retry-auditor",
+        "new_audit_policy": "manual-review-required"
+      },
+      "path": ".github/skills/retry-auditor/SKILL.md",
+      "renamed_from": ".github/skills/legacy-check/SKILL.md",
+      "tools": [
+        "read/file",
+        "github/write"
+      ]
+    },
+    {
+      "frontmatter": {
+        "name": "new-auditor"
+      },
+      "path": ".github/agents/new-auditor.agent.md",
+      "tools": [
+        "read/file"
+      ]
+    }
+  ],
+  "references": [],
+  "upstream_ref": "main-fixture-2026-10-10",
+  "upstream_sha": "0000000000000000000000000000000000000010"
+}

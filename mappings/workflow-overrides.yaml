@@ -1,0 +1,18 @@
+version: 1
+overrides:
+  .github/skills/installer/hve-core-installer/SKILL.md:
+    source_sha256: 2ef2d02e8f340f09e74cd78b368d708f1ef784b332b7fc59d29c5ae6e961020a
+    reviewed_source_sha256:
+      - 2ef2d02e8f340f09e74cd78b368d708f1ef784b332b7fc59d29c5ae6e961020a
+      - 5d454295a466a5d334344d9728f7366bba8254b062d4db918f9a812aa2eb8a6b
+    body_file: overrides/installer.md
+    metadata_overrides:
+      compatibility: Requires Python 3.11+, hve-codex, and a supported Codex client. Plugin discovery and hooks depend on client support and explicit trust.
+    rationale: Replace Copilot VSIX installation with managed Codex installation,
+      preserving consent and seven phases
+    review_note: Stable and pinned main retain the same consent, method selection,
+      validation, connector setup, rerun, and optional component/customization phases.
+      The main revision adds Bash jq checks and updates the advertised agents;
+      these Copilot installation mechanics are replaced by the Codex CLI prerequisites.
+      Unknown future source hashes still block conversion. Partial component installation
+      is not supplied by the full-mode managed installer.

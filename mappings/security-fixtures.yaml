@@ -1,0 +1,14 @@
+version: 1
+fixtures:
+  - source: .github/skills/accessibility/accessibility/tests/runtime_a11y/test_evidence_bundle.py
+    sha256: 89bfbf9b7222c76e1da2b821b251a3b34b09b1ef3b0129880308dedefadffe30
+    patterns: [private-key, github-token]
+    rationale: Reviewed synthetic redaction inputs; exact complete file bytes only.
+  - source: .github/skills/accessibility/accessibility/tests/runtime_a11y/test_visual_review.py
+    sha256: cb491640fe4e3db310bbb78d1cdd699a9ca0de454796952e09e5a6da832dec4a
+    patterns: [github-token]
+    rationale: Reviewed synthetic metadata redaction input; exact complete file bytes only.
+  - source: .github/skills/project-planning/adr-author/tests/test_scan_sensitive_content.py
+    sha256: 0796681aa9e448cf3a87373d258949e4174d61dd4bdef12d81f72cc20c836d3e
+    patterns: [private-key, github-token]
+    rationale: Reviewed synthetic secret detection inputs; exact complete file bytes only.

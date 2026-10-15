@@ -1,0 +1,350 @@
+name: Sync latest upstream source for human review
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Protected source channel
+        type: choice
+        options: [stable, prerelease, edge]
+        default: stable
+        required: true
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+    outputs:
+      changed:
+        description: Whether a new immutable upstream source was built
+        value: ${{ jobs.build.outputs.changed }}
+      source_sha:
+        description: Immutable upstream commit SHA
+        value: ${{ jobs.build.outputs.source_sha }}
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: hve-codex-sync-${{ inputs.channel || github.event.inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build latest ${{ inputs.channel || github.event.inputs.channel }} source outside the repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.select.outputs.changed }}
+      channel: ${{ steps.select.outputs.channel }}
+      target_branch: ${{ steps.select.outputs.target_branch }}
+      source_ref: ${{ steps.select.outputs.source_ref }}
+      source_sha: ${{ steps.select.outputs.source_sha }}
+      adapter_revision: ${{ steps.select.outputs.adapter_revision }}
+      build_inputs_sha256: ${{ steps.select.outputs.build_inputs_sha256 }}
+      builder_commit: ${{ steps.select.outputs.builder_commit }}
+    steps:
+      - name: Resolve protected channel branch
+        id: channel
+        env:
+          CHANNEL: ${{ inputs.channel || github.event.inputs.channel }}
+        run: |
+          case "$CHANNEL" in
+            stable) target_branch=main ;;
+            prerelease) target_branch=prerelease ;;
+            edge) target_branch=edge ;;
+            *) echo "Unsupported channel: $CHANNEL" >&2; exit 1 ;;
+          esac
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$target_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the protected channel source code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.channel.outputs.target_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python and install locked tools
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install locked environment
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.8.22
+          uv sync --locked --all-groups
+
+      - name: Discover the latest immutable upstream source and skip unchanged
+        id: select
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          TARGET_BRANCH: ${{ steps.channel.outputs.target_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != "refs/heads/$TARGET_BRANCH" ]; then
+            echo "Manual sync must be dispatched from the protected target branch." >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$TARGET_BRANCH")"
+          branch_json="$(gh api "repos/$GITHUB_REPOSITORY/branches/$TARGET_BRANCH")"
+          python -c 'import json,sys; assert json.loads(sys.argv[1]).get("protected") is True, "sync requires a protected target branch"' "$branch_json"
+          build_inputs_sha256="$(python .github/scripts/build_input_fingerprint.py)"
+          adapter_revision="$(git log -1 --format=%H -- src mappings schemas scripts/build.sh scripts/build_distribution.py tests/codex-host)"
+          test -n "$adapter_revision"
+          printf '{"version":1,"processed":[],"tag_shas":{}}\n' > "$RUNNER_TEMP/empty-ledger.json"
+          uv run hve-codex release discover --channel "$CHANNEL" --ledger "$RUNNER_TEMP/empty-ledger.json" --limit 1 > "$RUNNER_TEMP/discovery.json"
+          python - "$RUNNER_TEMP/discovery.json" "$CHANNEL" "$TARGET_BRANCH" "$adapter_revision" "$build_inputs_sha256" "$(git rev-parse HEAD)" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+
+          discovery_path, channel, target_branch, adapter_revision, build_inputs_sha256, builder_commit, output_path, summary_path = sys.argv[1:]
+          result = json.loads(Path(discovery_path).read_text(encoding="utf-8"))
+          sources = result.get("sources")
+          if not isinstance(sources, list) or len(sources) > 1:
+              raise SystemExit("Latest-source discovery returned an invalid result.")
+          values = {
+              "channel": channel,
+              "target_branch": target_branch,
+              "adapter_revision": adapter_revision,
+              "build_inputs_sha256": build_inputs_sha256,
+              "builder_commit": builder_commit,
+              "changed": "false",
+          }
+          if sources:
+              item = sources[0]
+              source_ref, source_sha = item.get("source_ref"), item.get("source_sha")
+              if not isinstance(source_ref, str) or not source_ref or "\n" in source_ref:
+                  raise SystemExit("Latest-source discovery returned an invalid source ref.")
+              if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+                  raise SystemExit("Latest-source discovery returned an invalid immutable source SHA.")
+              values.update(source_ref=source_ref, source_sha=source_sha)
+              lock_path = Path(f"release/{channel}/source-lock.json")
+              if lock_path.is_file():
+                  lock = json.loads(lock_path.read_text(encoding="utf-8"))
+                  if not isinstance(lock, dict):
+                      raise SystemExit("Existing source lock is not a JSON object.")
+                  manifest_path = Path(f"release/{channel}/release-manifest.json")
+                  if not manifest_path.is_file():
+                      raise SystemExit("Protected branch has a source lock without its reviewed release manifest.")
+                  manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                  source = manifest.get("source") if isinstance(manifest, dict) else None
+                  converter = manifest.get("converter") if isinstance(manifest, dict) else None
+                  if not isinstance(source, dict) or not isinstance(converter, dict):
+                      raise SystemExit("Existing release manifest has malformed provenance.")
+                  if (
+                      lock.get("schema_version") != 1
+                      or lock.get("channel") != channel
+                      or (lock.get("upstream_ref"), lock.get("upstream_sha")) != (source.get("ref"), source.get("sha"))
+                      or lock.get("adapter_revision") != manifest.get("adapter_sha")
+                      or lock.get("builder_commit") != converter.get("sha")
+                  ):
+                      raise SystemExit("Protected source lock and release manifest disagree; refusing to overwrite them.")
+                  unchanged = (
+                      lock.get("schema_version") == 1
+                      and lock.get("channel") == channel
+                      and lock.get("upstream_ref") == source_ref
+                      and lock.get("upstream_sha") == source_sha
+                      and lock.get("build_inputs_sha256") == build_inputs_sha256
+                  )
+                  if unchanged:
+                      values["changed"] = "false"
+                  else:
+                      values["changed"] = "true"
+              else:
+                  values["changed"] = "true"
+          for key, value in values.items():
+              with Path(output_path).open("a", encoding="utf-8", newline="\n") as output:
+                  output.write(f"{key}={value}\n")
+          if not sources:
+              with Path(summary_path).open("a", encoding="utf-8") as summary:
+                  summary.write(f"No published upstream source is available for {channel}; nothing to build.\n")
+          PY
+
+      - name: Build the exact upstream commit in an external directory
+        if: steps.select.outputs.changed == 'true'
+        env:
+          CHANNEL: ${{ steps.select.outputs.channel }}
+          SOURCE_REF: ${{ steps.select.outputs.source_ref }}
+          SOURCE_SHA: ${{ steps.select.outputs.source_sha }}
+          ADAPTER_REVISION: ${{ steps.select.outputs.adapter_revision }}
+          BUILD_INPUTS_SHA256: ${{ steps.select.outputs.build_inputs_sha256 }}
+          BUILDER_COMMIT: ${{ steps.select.outputs.builder_commit }}
+        run: |
+          source_dir="$RUNNER_TEMP/upstream-source"
+          dist="$RUNNER_TEMP/dist"
+          candidate="$RUNNER_TEMP/candidate"
+          git -c core.hooksPath=/dev/null -c core.autocrlf=false init "$source_dir"
+          git -c core.hooksPath=/dev/null -c core.autocrlf=false -C "$source_dir" remote add origin https://github.com/microsoft/hve-core.git
+          git -c core.hooksPath=/dev/null -c core.autocrlf=false -C "$source_dir" fetch --no-tags --depth=1 origin "$SOURCE_SHA"
+          git -c core.hooksPath=/dev/null -c core.autocrlf=false -C "$source_dir" checkout --detach FETCH_HEAD
+          test "$(git -c core.hooksPath=/dev/null -c core.autocrlf=false -C "$source_dir" rev-parse HEAD)" = "$SOURCE_SHA"
+          bash scripts/build.sh --output "$dist" --source-dir "$source_dir" --channel "$CHANNEL" --ref "$SOURCE_REF" --sha "$SOURCE_SHA" --adapter-revision "$ADAPTER_REVISION"
+          uv run hve-codex validate --output "$dist" --record
+          generated_at="$(git -C "$source_dir" show -s --format=%cI "$SOURCE_SHA")"
+          uv run python - "$dist/generated/provenance.json" "$CHANNEL" "$RUNNER_TEMP/manifest-inputs.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from hve_codex_porter.release import _trusted_scenario_hash
+
+          provenance_path, channel, values_path = sys.argv[1:]
+          provenance = json.loads(Path(provenance_path).read_text(encoding="utf-8"))
+          required = ("mapping_hash", "upstream_manifest_version", "converter_version")
+          if any(not isinstance(provenance.get(key), str) or not provenance[key] for key in required):
+              raise SystemExit("Build provenance is missing release-manifest inputs.")
+          values = {
+              "mapping_sha256": provenance["mapping_hash"],
+              "scenario_definition_sha256": _trusted_scenario_hash(Path.cwd()),
+              "upstream_manifest_version": provenance["upstream_manifest_version"],
+              "converter_version": provenance["converter_version"],
+              "upstream_prerelease": "true" if channel == "prerelease" else "false",
+          }
+          Path(values_path).write_text(json.dumps(values, sort_keys=True), encoding="utf-8")
+          for key, value in values.items():
+              if "\n" in value:
+                  raise SystemExit(f"Unsafe newline in {key}.")
+          PY
+          manifest_args=(
+            --root "$dist" --channel "$CHANNEL" --source-ref "$SOURCE_REF" --source-sha "$SOURCE_SHA"
+            --upstream-manifest-version "$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["upstream_manifest_version"])' "$RUNNER_TEMP/manifest-inputs.json")"
+            --adapter-sha "$ADAPTER_REVISION" --converter-sha "$BUILDER_COMMIT"
+            --converter-version "$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["converter_version"])' "$RUNNER_TEMP/manifest-inputs.json")"
+            --mapping-sha256 "$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["mapping_sha256"])' "$RUNNER_TEMP/manifest-inputs.json")"
+            --scenario-definition-sha256 "$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["scenario_definition_sha256"])' "$RUNNER_TEMP/manifest-inputs.json")"
+            --generated-at "$generated_at"
+          )
+          if [ "$CHANNEL" = prerelease ]; then manifest_args+=(--upstream-prerelease); fi
+          uv run hve-codex release manifest "${manifest_args[@]}"
+          bash scripts/build.sh --archive-only --output "$dist"
+          mkdir -p "$candidate/release/$CHANNEL" "$candidate/evidence"
+          python - "$dist/generated/release-manifest.json" "$candidate/release/$CHANNEL/source-lock.json" "$CHANNEL" "$SOURCE_REF" "$SOURCE_SHA" "$ADAPTER_REVISION" "$BUILD_INPUTS_SHA256" "$BUILDER_COMMIT" <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          manifest_path, lock_path, channel, source_ref, source_sha, adapter_revision, build_inputs_sha256, builder_commit = sys.argv[1:]
+          manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+          if manifest.get("channel") != channel:
+              raise SystemExit("Generated release manifest channel mismatch.")
+          source = manifest.get("source")
+          converter = manifest.get("converter")
+          if not isinstance(source, dict) or not isinstance(converter, dict):
+              raise SystemExit("Generated release manifest has malformed provenance.")
+          if (source.get("ref"), source.get("sha"), manifest.get("adapter_sha"), converter.get("sha")) != (source_ref, source_sha, adapter_revision, builder_commit):
+              raise SystemExit("Generated release manifest does not match the selected source lock.")
+          lock = {
+              "schema_version": 1,
+              "channel": channel,
+              "upstream_ref": source_ref,
+              "upstream_sha": source_sha,
+              "adapter_revision": adapter_revision,
+              "build_inputs_sha256": build_inputs_sha256,
+              "builder_commit": builder_commit,
+          }
+          Path(lock_path).write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          cp "$dist/generated/release-manifest.json" "$candidate/release/$CHANNEL/release-manifest.json"
+          cp "$dist/generated/checksums.txt" "$candidate/release/$CHANNEL/checksums.txt"
+          cp "$dist/generated/compatibility-report.json" "$candidate/evidence/compatibility-report.json"
+          cp "$dist.tar.gz" "$candidate/evidence/hve-core-codex-$CHANNEL-$SOURCE_SHA.tar.gz"
+          cp "$dist.tar.gz.sha256" "$candidate/evidence/hve-core-codex-$CHANNEL-$SOURCE_SHA.tar.gz.sha256"
+
+      - name: Upload external distribution and source-only review metadata
+        if: steps.select.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hve-core-${{ steps.select.outputs.channel }}-${{ steps.select.outputs.source_sha }}
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize manual review requirements
+        if: steps.select.outputs.changed == 'true'
+        run: |
+          {
+            echo "Built upstream ${{ steps.select.outputs.source_ref }} at ${{ steps.select.outputs.source_sha }} into an external distribution."
+            echo "The artifact contains the deterministic archive, checksums, compatibility report, and source-only release metadata."
+            echo "The draft PR stages only release/${{ steps.select.outputs.channel }}/source-lock.json, release-manifest.json, and checksums.txt. Human review and required CLI/Desktop acceptance evidence remain mandatory before merge or stable publication."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  open-metadata-pr:
+    name: Open a draft PR containing only source-lock metadata
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Download external build artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: hve-core-${{ needs.build.outputs.channel }}-${{ needs.build.outputs.source_sha }}
+          path: candidate
+
+      - name: Check out the protected target branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.build.outputs.target_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a short-lived pull-request-only GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.HVE_SYNC_APP_ID }}
+          private-key: ${{ secrets.HVE_SYNC_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Commit only source-lock metadata and open a draft review PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
+          TARGET_BRANCH: ${{ needs.build.outputs.target_branch }}
+          SOURCE_REF: ${{ needs.build.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+          ADAPTER_REVISION: ${{ needs.build.outputs.adapter_revision }}
+          BUILDER_COMMIT: ${{ needs.build.outputs.builder_commit }}
+        run: |
+          branch="sync/upstream-$CHANNEL-$SOURCE_SHA-$ADAPTER_REVISION"
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REPOSITORY_OWNER:$branch" --state open --json number --jq 'length')"
+          if [ "$existing" != 0 ]; then
+            echo "A review PR already exists for this immutable source and builder; it is left untouched so reviewer evidence is preserved." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git_auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          remote_branch="$(git -c http.extraheader="$git_auth_header" ls-remote --heads origin "refs/heads/$branch")"
+          if [ -n "$remote_branch" ]; then
+            echo "A closed or previously reviewed sync branch already exists; it is preserved for audit and will not be overwritten." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mkdir -p "release/$CHANNEL"
+          cp "candidate/release/$CHANNEL/source-lock.json" "release/$CHANNEL/source-lock.json"
+          cp "candidate/release/$CHANNEL/release-manifest.json" "release/$CHANNEL/release-manifest.json"
+          cp "candidate/release/$CHANNEL/checksums.txt" "release/$CHANNEL/checksums.txt"
+          git config user.name "HVE Core Codex Sync Bot"
+          git config user.email "hve-core-codex-sync[bot]@users.noreply.github.com"
+          git add -- "release/$CHANNEL/source-lock.json" "release/$CHANNEL/release-manifest.json" "release/$CHANNEL/checksums.txt"
+          if git diff --cached --quiet; then
+            echo "The protected branch already contains this exact source lock; no PR is needed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git switch --create "$branch"
+          git commit -m "chore(sync): lock $CHANNEL upstream $SOURCE_SHA"
+          git -c http.extraheader="$git_auth_header" push --set-upstream origin "$branch"
+          body="$RUNNER_TEMP/pr-body.md"
+          cat > "$body" <<EOF
+          ## Source-only sync candidate
+
+          This draft records upstream ref \`$SOURCE_REF\` at immutable commit \`$SOURCE_SHA\`, built by adapter revision \`$ADAPTER_REVISION\` from builder commit \`$BUILDER_COMMIT\`.
+
+          The Actions artifact contains the external deterministic distribution archive, SHA-256, compatibility report, release manifest, and checksums. The PR contains only source-lock metadata; migrated plugin or generated files are not committed.
+
+          Keep this PR in draft until a human reviews the archive and required CLI/Desktop acceptance scenarios, including native hooks and Vally evidence. Stable publication remains blocked until the reviewed runtime evidence and all existing release eligibility checks pass.
+
+          The current source-only workflow does not transport reviewer-authored runtime capture files into the rebuilt external distribution. Stable release eligibility remains fail-closed until a reviewed evidence-delivery path supplies those files and their envelope.
+          EOF
+          gh pr create --repo "$GITHUB_REPOSITORY" --base "$TARGET_BRANCH" --head "$branch" --draft --title "chore(sync): $CHANNEL upstream $SOURCE_SHA" --body-file "$body"

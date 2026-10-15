@@ -1,0 +1,137 @@
+name: codex-port-stable-golden-path-01
+description: Original stable golden-path-01 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-01-rpi-manual-and-full-auto-lifecycle
+    turns:
+      - Launch .github/prompts/hve-core/rpi.prompt.md
+      - 'Invoke .github/prompts/hve-core/rpi.prompt.md task=retry-limit in MANUAL mode. This is the MANUAL variant; research and plan only, then stop for human approval. Inspect src/importer.py and tests/test_importer.py. Add a public retry_call(operation, retry_limit=0) helper in src/importer.py without changing the existing import_rows implementation or behavior. operation is a zero-argument callable. Validate retry_limit before calling operation: reject bool and every non-int with TypeError, and reject negative integers with ValueError. Make at most 1 + retry_limit calls. Retry only OSError, immediately with no sleep, delay, backoff, or jitter. Return the first successful result. If the final allowed attempt raises OSError, propagate that same exception unchanged. Propagate every non-OSError exception unchanged on its first call. Add meaningful tests in tests/test_importer.py for zero retries/one call, transient OSError followed by success with exact call count, exhausted OSError attempts with the same final exception and exact call count, immediate non-OSError propagation with one call, and invalid bool/non-int/negative limits rejected before the callable runs. Research and plan only: delegate to .github/agents/hve-core/subagents/researcher-subagent.agent.md and .github/agents/hve-core/task-planner.agent.md only if warranted. Put research at .copilot-tracking/research/<YYYY-MM-DD>/retry-limit-research.md and the plan, including the exact API and test matrix, at .copilot-tracking/plans/<YYYY-MM-DD>/retry-limit-plan.instructions.md. Do not edit either fixture file. Stop before implementation, show the exact proposal, and leave every human approval checkbox unchecked.'
+      - Resume task=retry-limit from its tracking artifacts. Walk me through the exact proposed signature, TypeError/ValueError boundary, attempt count, OSError-only retry rule, no-delay behavior, exception propagation, and tests. Ask for approval before any source or test edit. Keep src/importer.py and tests/test_importer.py unchanged and preserve the manual human-review gate.
+      - 'Start the separate FULL-AUTO variant task=bounded-retry-helper by invoking .github/prompts/hve-core/rpi.prompt.md. I explicitly authorize implementation and review changes only to src/importer.py and tests/test_importer.py in this disposable fixture. Add a public retry_call(operation, retry_limit=0) helper in src/importer.py without changing the existing import_rows implementation or behavior. operation is a zero-argument callable. Validate retry_limit before calling operation: reject bool and every non-int with TypeError, and reject negative integers with ValueError. Make at most 1 + retry_limit calls. Retry only OSError, immediately with no sleep, delay, backoff, or jitter. Return the first successful result. If the final allowed attempt raises OSError, propagate that same exception unchanged. Propagate every non-OSError exception unchanged on its first call. Add meaningful tests in tests/test_importer.py for zero retries/one call, transient OSError followed by success with exact call count, exhausted OSError attempts with the same final exception and exact call count, immediate non-OSError propagation with one call, and invalid bool/non-int/negative limits rejected before the callable runs. Use the existing full-auto canonical artifact paths in this scenario for research, plan, details, changes, and review; complete Research, Plan, Implementation, and Review, using .github/agents/hve-core/task-implementor.agent.md and .github/agents/hve-core/task-reviewer.agent.md as appropriate. Keep the RPI human-review checkboxes unchecked, make no external writes, and report only validation you actually ran.'
+      - Resume task=bounded-retry-helper from its persisted artifacts after an interruption. Continue only within the fixture authorization and the exact retry_call contract above. Preserve import_rows, finish the requested tests/review if still pending, and report what remains. Keep human-review checkboxes unchecked unless I explicitly approve one.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-01
+      legacy_title: RPI manual and full-auto lifecycle with canonical tracking artifacts
+      prompt_only_checks:
+        - manual-approval-remains-a-gate
+        - manual-mode-stops-before-edit
+        - manual-source-unchanged-after-resume
+        - manual-tests-unchanged-after-resume
+        - full-auto-source-modified-after-implementation-resume
+        - full-auto-tests-modified-after-implementation-resume
+        - resume-from-tracking-artifacts
+        - preserve-human-review-checkboxes
+        - recover-rpi-source-artifacts
+      deterministic_additions:
+        - Per-turn diffs require no net importer or test-file change during Vally turns 0 through 2, including the Launch turn.
+        - Final cumulative diff requires both authorized files to differ at the end of the fourth legacy prompt (Vally turn 4).
+        - These checks do not replace the legacy exact fixture SHA-at-turn assertions or the human approval-checkbox assertion.
+    rubric:
+      - Uses the installed RPI skill and its mapped custom roles, with source SHA evidence recorded for every recovered source artifact.
+      - Manual mode persists research and plan under canonical .copilot-tracking paths, resumes from those artifacts, and stops before source edits pending explicit review.
+      - Full-auto mode is a separate task whose fixture-only implementation authorization is explicit, then persists implementation and review progress using canonical tracking conventions.
+      - Never auto-checks a human approval or review checkbox, including after resume.
+      - Reports delegation and validation only when the corresponding observable evidence exists.
+      - Implements retry_call with the specified validation, exact 1 + retry_limit bound, OSError-only retries without delays, unchanged exception propagation, unchanged import_rows, and tests for all requested boundaries.
+    graders:
+      - type: prompt
+        name: judge-golden-path-01
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: canonical-research-artifact
+        config:
+          path: .copilot-tracking/research/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/retry-limit-research.md
+      - type: file-exists
+        name: canonical-plan-artifact
+        config:
+          path: .copilot-tracking/plans/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/retry-limit-plan.instructions.md
+      - type: file-exists
+        name: full-auto-research-artifact
+        config:
+          path: .copilot-tracking/research/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-research.md
+      - type: file-exists
+        name: full-auto-plan-artifact
+        config:
+          path: .copilot-tracking/plans/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-plan.instructions.md
+      - type: file-exists
+        name: full-auto-details-artifact
+        config:
+          path: .copilot-tracking/details/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-details.md
+      - type: file-exists
+        name: full-auto-change-log
+        config:
+          path: .copilot-tracking/changes/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-changes.md
+      - type: file-exists
+        name: full-auto-review-log
+        config:
+          path: .copilot-tracking/reviews/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-plan-review.md
+      - type: diff-not-contains
+        name: importer-unchanged-at-launch-boundary
+        turn: 0
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-at-launch-boundary
+        turn: 0
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+      - type: diff-not-contains
+        name: importer-unchanged-after-manual-work
+        turn: 1
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-after-manual-work
+        turn: 1
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+      - type: diff-not-contains
+        name: importer-unchanged-after-manual-resume
+        turn: 2
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-after-manual-resume
+        turn: 2
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+      - type: diff-contains
+        name: authorized-importer-change-at-final-boundary
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-contains
+        name: authorized-test-change-at-final-boundary
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/prompts/hve-core/rpi.prompt.md
+          dest: .github/prompts/hve-core/rpi.prompt.md
+        - src: ../../.github/agents/hve-core/rpi-agent.agent.md
+          dest: .github/agents/hve-core/rpi-agent.agent.md
+        - src: ../../.github/agents/hve-core/subagents/researcher-subagent.agent.md
+          dest: .github/agents/hve-core/subagents/researcher-subagent.agent.md
+        - src: ../../.github/agents/hve-core/task-planner.agent.md
+          dest: .github/agents/hve-core/task-planner.agent.md
+        - src: ../../.github/agents/hve-core/task-implementor.agent.md
+          dest: .github/agents/hve-core/task-implementor.agent.md
+        - src: ../../.github/agents/hve-core/task-reviewer.agent.md
+          dest: .github/agents/hve-core/task-reviewer.agent.md
+        - src: fixtures/src/importer.py
+          dest: src/importer.py
+        - src: fixtures/tests/test_importer.py
+          dest: tests/test_importer.py
+        - src: fixtures/README.md
+          dest: README.md

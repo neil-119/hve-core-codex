@@ -1,0 +1,16 @@
+{
+  "schema": "hve.runtime-acceptance-contract",
+  "version": 2,
+  "behavior_engine": "@microsoft/vally",
+  "behavior_requirement": "independently verified full converted upstream suite and channel-specific custom Vally cases using original scoring",
+  "host_surfaces": ["cli", "desktop"],
+  "host_checks": [
+    "implicit-research-selection",
+    "explicit-only-negative-routing",
+    "trusted-hooks-native-positive-negative-resume",
+    "delegated-native-role-and-hook-context",
+    "child-read-only-permission"
+  ],
+  "deferred_checks_are_required": true,
+  "scheduled_model_calls": false
+}

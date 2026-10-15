@@ -1,0 +1,56 @@
+name: codex-port-stable-golden-path-02
+description: Original stable golden-path-02 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-02-delegated-code-review-perspectives
+    turns:
+      - Launch .github/agents/code-review/functional-code-review.agent.md
+      - Invoke .github/agents/code-review/functional-code-review.agent.md to review src/retry_policy.py. Delegate separate read-only correctness, security, and architecture perspectives to .github/agents/security/security-reviewer.agent.md and .github/agents/project-planning/system-architecture-reviewer.agent.md. Aggregate and deduplicate findings with severity and exact line evidence in .copilot-tracking/reviews/retry-policy-review.md. Do not edit the source or claim unavailable verification.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-02
+      legacy_title: Read-only code review from distinct installed agent perspectives
+      prompt_only_checks:
+        - recover-review-agent-source
+    rubric:
+      - Uses distinct installed source-agent roles for functional correctness, security, and architecture perspectives.
+      - Keeps the staged source read-only and does not invent delegated work or test results.
+      - Aggregates findings with severity, exact evidence, and clear unavailable-reviewer status.
+      - Records the installed upstream source SHA and confirms the review source artifact was recovered unchanged.
+    graders:
+      - type: prompt
+        name: judge-golden-path-02
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: diff-not-contains
+        name: review-does-not-edit-source
+        config:
+          pattern: (?m)^diff --git a/src/retry_policy\.py b/
+      - type: file-exists
+        name: review-artifact-written
+        config:
+          path: .copilot-tracking/reviews/retry-policy-review.md
+      - type: diff-not-contains
+        name: read-only-delegation
+        config:
+          pattern: (?m)^diff --git a/(?:src/retry_policy\.py) b/
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/agents/code-review/functional-code-review.agent.md
+          dest: .github/agents/code-review/functional-code-review.agent.md
+        - src: ../../.github/agents/security/security-reviewer.agent.md
+          dest: .github/agents/security/security-reviewer.agent.md
+        - src: ../../.github/agents/project-planning/system-architecture-reviewer.agent.md
+          dest: .github/agents/project-planning/system-architecture-reviewer.agent.md
+        - src: fixtures/src/retry_policy.py
+          dest: src/retry_policy.py

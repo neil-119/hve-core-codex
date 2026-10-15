@@ -1,0 +1,72 @@
+name: codex-port-stable-golden-path-06
+description: Original stable golden-path-06 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-06-data-science-and-engineering-workflow-selection
+    turns:
+      - Launch .github/agents/data-science/gen-data-spec.agent.md
+      - Invoke .github/agents/data-science/gen-data-spec.agent.md for data/telemetry.csv. Use 2026-10-10 as this fixture's artifact date. Profile the data, state assumptions, and create the canonical outputs/data-dictionary-telemetry-2026-10-10.md, outputs/data-profile-telemetry-2026-10-10.json, outputs/data-objectives-telemetry-2026-10-10.json, and outputs/data-summary-telemetry-2026-10-10.md artifacts. Do not invent results beyond the supplied rows.
+      - Use .github/agents/data-science/gen-jupyter-notebook.agent.md to create a reusable EDA notebook at notebooks/telemetry-eda.ipynb based on the source workflow's notebook sections. Then invoke .github/agents/hve-core/task-planner.agent.md for the separate deterministic CSV normalization request in docs/engineering-task.md; save the dated plan and implementation details under the canonical .copilot-tracking/plans/ and .copilot-tracking/details/ paths and do not invent test execution.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-06
+      legacy_title: Select source data and engineering workflows from their actual installed agents
+      prompt_only_checks:
+        - resume-state
+        - recover-data-and-planning-sources
+    rubric:
+      - Selects the data-science workflow for the supplied CSV and the engineering planning workflow for the separate code task.
+      - Uses the source agent's canonical outputs/ and notebooks/ contracts and the planner's canonical tracking directories.
+      - Checks available inputs and labels missing information rather than fabricating analysis.
+      - Records installed source SHA evidence for the three generated workflow entrypoints.
+    graders:
+      - type: prompt
+        name: judge-golden-path-06
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: data-dictionary-output
+        config:
+          path: outputs/data-dictionary-telemetry-2026-10-10.md
+      - type: file-exists
+        name: data-profile-output
+        config:
+          path: outputs/data-profile-telemetry-2026-10-10.json
+      - type: file-exists
+        name: data-objectives-output
+        config:
+          path: outputs/data-objectives-telemetry-2026-10-10.json
+      - type: file-exists
+        name: summary-output
+        config:
+          path: outputs/data-summary-telemetry-2026-10-10.md
+      - type: file-exists
+        name: notebook-output
+        config:
+          path: notebooks/telemetry-eda.ipynb
+      - type: file-exists
+        name: canonical-planning-artifact
+        config:
+          path: .copilot-tracking/plans/*/normalize-telemetry-plan.instructions.md
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/agents/data-science/gen-data-spec.agent.md
+          dest: .github/agents/data-science/gen-data-spec.agent.md
+        - src: ../../.github/agents/data-science/gen-jupyter-notebook.agent.md
+          dest: .github/agents/data-science/gen-jupyter-notebook.agent.md
+        - src: ../../.github/agents/hve-core/task-planner.agent.md
+          dest: .github/agents/hve-core/task-planner.agent.md
+        - src: fixtures/data/telemetry.csv
+          dest: data/telemetry.csv
+        - src: fixtures/docs/engineering-task.md
+          dest: docs/engineering-task.md

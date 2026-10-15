@@ -1,0 +1,48 @@
+name: codex-port-edge-edge-path-06
+description: Original edge edge-path-06 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-06-data-science-coach
+    turns:
+      - Launch .github/agents/data-science-engineering/data-science-engineering-coach.agent.md
+      - Invoke .github/agents/data-science-engineering/data-science-engineering-coach.agent.md and explicitly select the current analysis job for data/retention.csv. Follow .github/skills/data-science-engineering/analysis-authoring/SKILL.md, save results under .copilot-tracking/ds/retention-analysis/, and do not use retired data agents or write an unapproved notebook.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-06
+      legacy_title: Current data coach waits for missing session and analysis prerequisites
+      prompt_only_checks:
+        - no-notebook
+        - source-recovery
+    rubric:
+      - Uses the current coach and analysis skill and asks whether to initialize a new session or resume missing state before recording a job or creating artifacts.
+      - Keeps analysis blocked until the question, audience, and deliverable shape are confirmed; no retired agent paths or inferred notebook authorization.
+      - Leaves the CSV unchanged and creates no session state, analysis output, or notebook before prerequisite confirmation.
+    graders:
+      - type: prompt
+        name: judge-edge-path-06
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: diff-empty
+        name: no-local-workspace-mutation
+    agent_environment:
+      skills:
+        - ../../.github/skills/data-science-engineering/analysis-authoring
+        - ../../.github/skills/data-science-engineering/data-science-engineering-foundation
+      files:
+        - src: ../../.github/agents/data-science-engineering/data-science-engineering-coach.agent.md
+          dest: .github/agents/data-science-engineering/data-science-engineering-coach.agent.md
+        - src: ../../.github/skills/data-science-engineering/analysis-authoring/SKILL.md
+          dest: .github/skills/data-science-engineering/analysis-authoring/SKILL.md
+        - src: ../../.github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md
+          dest: .github/skills/data-science-engineering/data-science-engineering-foundation/SKILL.md
+        - src: fixtures/data/retention.csv
+          dest: data/retention.csv

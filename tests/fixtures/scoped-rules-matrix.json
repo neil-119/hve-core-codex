@@ -1,0 +1,26 @@
+{
+  "registry": {
+    "version": 1,
+    "rules": [
+      {
+        "id": "source-language", "source": "source.instructions.md", "path": "source.md",
+        "apply_to": ["src/**/*.{py,ts}", "!src/generated/**"], "precedence": 10, "imports": []
+      },
+      {
+        "id": "docs-nested", "source": "docs.instructions.md", "path": "docs.md",
+        "apply_to": ["docs/{product,engineering}/**/*.md"], "precedence": 20, "imports": []
+      }
+    ]
+  },
+  "contents": {
+    "source.md": "Preserve language-specific conventions.\n",
+    "docs.md": "Keep documentation accurate and linked.\n"
+  },
+  "expected_by_path": {
+    "src/app.py": ["source-language"],
+    "src/nested/app.ts": ["source-language"],
+    "src/generated/output.py": [],
+    "docs/product/guide/setup.md": ["docs-nested"],
+    "experimental/feature.py": []
+  }
+}

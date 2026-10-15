@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hve-core-codex"
+version = "0.1.0"
+description = "Deterministic HVE Core to Codex distribution converter and managed installer"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["markdown-it-py==3.0.0", "ruamel.yaml==0.18.10", "jsonschema==4.23.0", "tomlkit==0.13.2", "wcmatch==10.0"]
+
+[project.scripts]
+hve-codex = "hve_codex_porter.cli:main"
+
+[dependency-groups]
+dev = ["pytest==9.0.3", "ruff==0.11.2", "pip-audit==2.8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+pythonpath = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hve_codex_porter"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/mappings", "/schemas", "/scripts", "/.github", "/docs", "/specs", "/vally-executor/*.mjs", "/vally-executor/package.json", "/vally-executor/navigation.json", "/vally-executor/package-lock.json", "/vally-executor/README.md", "/README.md", "/ELI5.md", "/LICENSE", "/THIRD-PARTY-NOTICES.md", "/pyproject.toml", "/uv.lock"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"mappings" = "hve_codex_porter/data/mappings"
+"schemas" = "hve_codex_porter/data/schemas"
+"tests/codex-host/stable.json" = "hve_codex_porter/data/codex-host/stable.json"
+"tests/codex-host/edge.json" = "hve_codex_porter/data/codex-host/edge.json"
+"tests/vally-custom" = "hve_codex_porter/data/tests/vally-custom"
+"vally-executor/navigation.json" = "hve_codex_porter/data/vally-executor/navigation.json"
+"vally-executor/index.mjs" = "hve_codex_porter/data/vally-executor/index.mjs"
+"vally-executor/plan.mjs" = "hve_codex_porter/data/vally-executor/plan.mjs"
+"vally-executor/run.mjs" = "hve_codex_porter/data/vally-executor/run.mjs"
+"vally-executor/verify.mjs" = "hve_codex_porter/data/vally-executor/verify.mjs"
+"vally-executor/turn.mjs" = "hve_codex_porter/data/vally-executor/turn.mjs"
+"vally-executor/app-server-events.mjs" = "hve_codex_porter/data/vally-executor/app-server-events.mjs"
+"vally-executor/app-server.mjs" = "hve_codex_porter/data/vally-executor/app-server.mjs"
+"vally-executor/app-server-execution.mjs" = "hve_codex_porter/data/vally-executor/app-server-execution.mjs"
+"vally-executor/settlement.mjs" = "hve_codex_porter/data/vally-executor/settlement.mjs"
+"vally-executor/skill-isolation.mjs" = "hve_codex_porter/data/vally-executor/skill-isolation.mjs"
+"vally-executor/grader-capabilities.mjs" = "hve_codex_porter/data/vally-executor/grader-capabilities.mjs"
+"vally-executor/shell-normalization.mjs" = "hve_codex_porter/data/vally-executor/shell-normalization.mjs"
+"vally-executor/mcp-config-translator.mjs" = "hve_codex_porter/data/vally-executor/mcp-config-translator.mjs"
+"vally-executor/bundle-resource-integrity.mjs" = "hve_codex_porter/data/vally-executor/bundle-resource-integrity.mjs"
+"vally-executor/judge.mjs" = "hve_codex_porter/data/vally-executor/judge.mjs"
+"vally-executor/judge-evidence.mjs" = "hve_codex_porter/data/vally-executor/judge-evidence.mjs"
+"vally-executor/package.json" = "hve_codex_porter/data/vally-executor/package.json"
+"vally-executor/package-lock.json" = "hve_codex_porter/data/vally-executor/package-lock.json"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+# Evaluation inputs intentionally contain defects for agents to find.
+extend-exclude = ["tests/vally-custom/**/fixtures/**"]

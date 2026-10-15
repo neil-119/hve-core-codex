@@ -1,0 +1,61 @@
+name: codex-port-edge-edge-path-08
+description: Original edge edge-path-08 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 1800s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-08-dt-rpi-handoff
+    turns:
+      - Launch .github/agents/design-thinking/dt-coach.agent.md
+      - Invoke .github/agents/design-thinking/dt-coach.agent.md to resume Problem Space for profile-preferences. Preserve slug/state. For RPI exit follow .github/skills/design-thinking/dt-rpi-integration/SKILL.md and hand off to .github/skills/rpi/rpi-research/SKILL.md with state pointer and summary. Offer continue/revise/stop and wait.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-08
+      legacy_title: DT Problem Space handoff targets current RPI Research
+      prompt_only_checks:
+        - gate
+        - source-recovery
+    rubric:
+      - Current integration targets rpi-research, not RPI Agent; it preserves slug/state.
+      - Waits for user choice before advancing.
+    graders:
+      - type: prompt
+        name: judge-edge-path-08
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-not-exists
+        name: summary-awaits-user-choice
+        config:
+          path: .copilot-tracking/dt/profile-preferences/handoff-summary.md
+      - type: file-not-exists
+        name: handoff-awaits-user-choice
+        config:
+          path: .copilot-tracking/dt/profile-preferences/rpi-handoff-problem-space.md
+      - type: diff-empty
+        name: no-local-workspace-mutation
+    agent_environment:
+      skills:
+        - ../../.github/skills/design-thinking/dt-coaching-foundation
+        - ../../.github/skills/design-thinking/dt-methods
+        - ../../.github/skills/design-thinking/dt-rpi-integration
+        - ../../.github/skills/rpi/rpi-research
+      files:
+        - src: ../../.github/agents/design-thinking/dt-coach.agent.md
+          dest: .github/agents/design-thinking/dt-coach.agent.md
+        - src: ../../.github/skills/design-thinking/dt-coaching-foundation/SKILL.md
+          dest: .github/skills/design-thinking/dt-coaching-foundation/SKILL.md
+        - src: ../../.github/skills/design-thinking/dt-methods/SKILL.md
+          dest: .github/skills/design-thinking/dt-methods/SKILL.md
+        - src: ../../.github/skills/design-thinking/dt-rpi-integration/SKILL.md
+          dest: .github/skills/design-thinking/dt-rpi-integration/SKILL.md
+        - src: ../../.github/skills/rpi/rpi-research/SKILL.md
+          dest: .github/skills/rpi/rpi-research/SKILL.md
+        - src: fixtures/.copilot-tracking/dt/profile-preferences/coaching-state.md
+          dest: .copilot-tracking/dt/profile-preferences/coaching-state.md

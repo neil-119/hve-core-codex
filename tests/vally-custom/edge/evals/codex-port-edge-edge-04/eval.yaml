@@ -1,0 +1,64 @@
+name: codex-port-edge-edge-path-04
+description: Original edge edge-path-04 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 1200s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-04-prd-brd
+    turns:
+      - Launch .github/agents/project-planning/prd-builder.agent.md
+      - Invoke .github/agents/project-planning/prd-builder.agent.md with docs/brief.md. Write docs/project-planning/profile-preferences.md and .copilot-tracking/prd-sessions/profile-preferences.state.json. Use delegated reviewer only as required; report observed results.
+      - Build the BRD with .github/agents/project-planning/brd-builder.agent.md at docs/project-planning/profile-preferences-brd.md and current BRD session state. Use matching delegated-only reviewer only as required.
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-04
+      legacy_title: PRD and BRD current outputs with delegated-only quality roles
+      prompt_only_checks:
+        - source-recovery
+    rubric:
+      - Uses distinct current PRD/BRD outputs and session conventions.
+      - Quality roles remain delegated-only; unseen child results are not claimed.
+    graders:
+      - type: prompt
+        name: judge-edge-path-04
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: prd
+        config:
+          path: docs/project-planning/profile-preferences.md
+      - type: file-exists
+        name: prd-state
+        config:
+          path: .copilot-tracking/prd-sessions/profile-preferences.state.json
+      - type: file-exists
+        name: brd
+        config:
+          path: docs/project-planning/profile-preferences-brd.md
+      - type: file-exists
+        name: brd-state
+        config:
+          path: .copilot-tracking/brd-sessions/profile-preferences.state.json
+    agent_environment:
+      skills:
+        - ../../.github/skills/project-planning/requirements-author
+      files:
+        - src: ../../.github/agents/project-planning/prd-builder.agent.md
+          dest: .github/agents/project-planning/prd-builder.agent.md
+        - src: ../../.github/agents/project-planning/brd-builder.agent.md
+          dest: .github/agents/project-planning/brd-builder.agent.md
+        - src: ../../.github/agents/project-planning/subagents/prd-quality-reviewer.agent.md
+          dest: .github/agents/project-planning/subagents/prd-quality-reviewer.agent.md
+        - src: ../../.github/agents/project-planning/subagents/brd-quality-reviewer.agent.md
+          dest: .github/agents/project-planning/subagents/brd-quality-reviewer.agent.md
+        - src: ../../.github/skills/project-planning/requirements-author/SKILL.md
+          dest: .github/skills/project-planning/requirements-author/SKILL.md
+        - src: fixtures/docs/brief.md
+          dest: docs/brief.md

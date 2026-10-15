@@ -1,0 +1,4 @@
+version: 1
+ordering: explicit-precedence-then-source-path
+general_source: .github/copilot-instructions.md
+context_budget_bytes: 8192

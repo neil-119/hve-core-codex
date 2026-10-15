@@ -1,0 +1,113 @@
+name: codex-port-edge-edge-path-01
+description: Original edge edge-path-01 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 3600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: edge-edge-path-01-rpi-lifecycle
+    turns:
+      - Launch .github/agents/hve-core/rpi-agent.agent.md
+      - 'Invoke .github/agents/hve-core/rpi-agent.agent.md task=retry-limit in MANUAL mode. This is the MANUAL variant; research only, then stop before planning for human approval. Inspect src/importer.py and tests/test_importer.py. Add a public retry_call(operation, retry_limit=0) helper in src/importer.py without changing the existing import_rows implementation or behavior. operation is a zero-argument callable. Validate retry_limit before calling operation: reject bool and every non-int with TypeError, and reject negative integers with ValueError. Make at most 1 + retry_limit calls. Retry only OSError, immediately with no sleep, delay, backoff, or jitter. Return the first successful result. If the final allowed attempt raises OSError, propagate that same exception unchanged. Propagate every non-OSError exception unchanged on its first call. Add meaningful tests in tests/test_importer.py for zero retries/one call, transient OSError followed by success with exact call count, exhausted OSError attempts with the same final exception and exact call count, immediate non-OSError propagation with one call, and invalid bool/non-int/negative limits rejected before the callable runs. Use .github/skills/rpi/rpi-research/SKILL.md for research only; put it at .copilot-tracking/research/<YYYY-MM-DD>/retry-limit-research.md. Propose the exact API/test matrix in the research record, then stop before edits and leave every human approval checkbox unchecked.'
+      - Resume task=retry-limit from its artifacts. I approve advancing to Plan only. Write .copilot-tracking/plans/<YYYY-MM-DD>/retry-limit-plan.md with the exact signature, validation errors, attempt bound, OSError-only immediate retry, propagation rules, and requested test matrix. Do not edit src/importer.py or tests/test_importer.py; stop before Implementation and wait for review.
+      - 'Start the separate FULL-AUTO variant task=bounded-retry-helper. I explicitly authorize changes only to src/importer.py and tests/test_importer.py in this fixture. Add a public retry_call(operation, retry_limit=0) helper in src/importer.py without changing the existing import_rows implementation or behavior. operation is a zero-argument callable. Validate retry_limit before calling operation: reject bool and every non-int with TypeError, and reject negative integers with ValueError. Make at most 1 + retry_limit calls. Retry only OSError, immediately with no sleep, delay, backoff, or jitter. Return the first successful result. If the final allowed attempt raises OSError, propagate that same exception unchanged. Propagate every non-OSError exception unchanged on its first call. Add meaningful tests in tests/test_importer.py for zero retries/one call, transient OSError followed by success with exact call count, exhausted OSError attempts with the same final exception and exact call count, immediate non-OSError propagation with one call, and invalid bool/non-int/negative limits rejected before the callable runs. Complete the current RPI phases, use .github/skills/rpi/rpi-review/SKILL.md for review, and save review evidence at .copilot-tracking/reviews/logs/<YYYY-MM-DD>/bounded-retry-helper-review.md. Keep human approval unchecked and make no external writes.'
+    tags:
+      category: codex-port-preservation
+      channel: edge
+      legacy_case: edge-path-01
+      legacy_title: Manual RPI boundary, resume, and separate automatic fixture task
+      prompt_only_checks:
+        - gate
+        - resume
+        - scope
+        - source-recovery
+      deterministic_additions:
+        - Per-turn diffs require no net importer or test-file change during Vally turns 0 through 2, covering Launch, manual research, and the Plan-only approval.
+        - These no-net-change checks do not replace literal fixture SHA-at-turn or human approval semantics.
+    rubric:
+      - Manual work stops before Implementation and uses current dated paths; no details contract.
+      - Automatic work is separate and fixture-scoped; human review stays gated.
+      - Implements retry_call with the specified validation, exact 1 + retry_limit bound, OSError-only retries without delays, unchanged exception propagation, unchanged import_rows, and tests for all requested boundaries.
+    graders:
+      - type: prompt
+        name: judge-edge-path-01
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: research
+        config:
+          path: .copilot-tracking/research/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/retry-limit-research.md
+      - type: file-exists
+        name: plan
+        config:
+          path: .copilot-tracking/plans/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/retry-limit-plan.md
+      - type: file-exists
+        name: review
+        config:
+          path: .copilot-tracking/reviews/logs/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/bounded-retry-helper-review.md
+      - type: diff-not-contains
+        name: importer-unchanged-at-launch-boundary
+        turn: 0
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-at-launch-boundary
+        turn: 0
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+      - type: diff-not-contains
+        name: importer-unchanged-after-manual-research
+        turn: 1
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-after-manual-research
+        turn: 1
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+      - type: diff-not-contains
+        name: importer-unchanged-after-plan-only-approval
+        turn: 2
+        config:
+          pattern: '(?m)^diff --git a/src/importer\.py b/src/importer\.py$'
+      - type: diff-not-contains
+        name: tests-unchanged-after-plan-only-approval
+        turn: 2
+        config:
+          pattern: '(?m)^diff --git a/tests/test_importer\.py b/tests/test_importer\.py$'
+    agent_environment:
+      commands:
+        - python .codex/setup-rpi-pytest.py
+      commandTimeout: 120s
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      skills:
+        - ../../.github/skills/rpi/rpi-research
+        - ../../.github/skills/rpi/rpi-plan
+        - ../../.github/skills/rpi/rpi-plan-critique
+        - ../../.github/skills/rpi/rpi-implement
+        - ../../.github/skills/rpi/rpi-review
+      files:
+        - src: ../../.github/agents/hve-core/rpi-agent.agent.md
+          dest: .github/agents/hve-core/rpi-agent.agent.md
+        - src: ../../.github/skills/rpi/rpi-research/SKILL.md
+          dest: .github/skills/rpi/rpi-research/SKILL.md
+        - src: ../../.github/skills/rpi/rpi-plan/SKILL.md
+          dest: .github/skills/rpi/rpi-plan/SKILL.md
+        - src: ../../.github/skills/rpi/rpi-plan-critique/SKILL.md
+          dest: .github/skills/rpi/rpi-plan-critique/SKILL.md
+        - src: ../../.github/skills/rpi/rpi-implement/SKILL.md
+          dest: .github/skills/rpi/rpi-implement/SKILL.md
+        - src: ../../.github/skills/rpi/rpi-review/SKILL.md
+          dest: .github/skills/rpi/rpi-review/SKILL.md
+        - src: fixtures/src/importer.py
+          dest: src/importer.py
+        - src: fixtures/tests/test_importer.py
+          dest: tests/test_importer.py
+        - src: fixtures/setup-rpi-pytest.py
+          dest: .codex/setup-rpi-pytest.py

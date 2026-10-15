@@ -1,0 +1,69 @@
+name: codex-port-stable-golden-path-04
+description: Original stable golden-path-04 workflow preserved with Vally's built-in graders.
+type: capability
+defaults:
+  runs: 1
+  timeout: 600s
+  executor: copilot-sdk
+  judge_reasoning_effort: medium
+stimuli:
+  - name: stable-golden-path-04-prd-brd-independent-quality-review
+    turns:
+      - Launch .github/agents/project-planning/prd-builder.agent.md
+      - Invoke .github/agents/project-planning/prd-builder.agent.md to create the product requirements for the import-retry initiative from docs/discovery/import-retry-notes.md. Follow its canonical output paths docs/prds/import-retry.md and .copilot-tracking/prd-sessions/import-retry.state.json. Preserve unknowns and measurable acceptance criteria.
+      - Now invoke .github/agents/project-planning/brd-builder.agent.md to create the business requirements at docs/brds/import-retry-brd.md and .copilot-tracking/brd-sessions/import-retry-brd.state.json. Ask .github/agents/hve-core/task-reviewer.agent.md for an independent quality review before claiming either document ready. Do not claim stakeholder approval.
+    tags:
+      category: codex-port-preservation
+      channel: stable
+      legacy_case: golden-path-04
+      legacy_title: PRD and BRD creation with independent source-agent quality review
+      prompt_only_checks:
+        - recover-prd-brd-source-artifacts
+    rubric:
+      - Creates PRD and BRD at the paths prescribed by their installed source workflows, with their canonical state files.
+      - Separates business outcomes from product requirements and includes measurable, traceable acceptance criteria.
+      - Uses an independent reviewer and records findings before declaring readiness.
+      - Labels assumptions and unresolved questions without fabricating stakeholder approval.
+    graders:
+      - type: prompt
+        name: judge-golden-path-04
+        config:
+          threshold: 0.7
+          evidence:
+            - trajectory
+            - diff
+      - type: file-exists
+        name: prd-output
+        config:
+          path: docs/prds/import-retry.md
+      - type: file-matches
+        name: prd-session-state
+        config:
+          path: .copilot-tracking/prd-sessions/import-retry.state.json
+          pattern: '(?m)^\s*"prdFile"\s*:\s*"docs/prds/import-retry\.md"'
+      - type: file-exists
+        name: brd-output
+        config:
+          path: docs/brds/import-retry-brd.md
+      - type: file-matches
+        name: brd-session-state
+        config:
+          path: .copilot-tracking/brd-sessions/import-retry-brd.state.json
+          pattern: '(?m)^\s*"brdFile"\s*:\s*"docs/brds/import-retry-brd\.md"'
+      - type: file-exists
+        name: independent-review
+        config:
+          path: .copilot-tracking/reviews/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/import-retry*-review.md
+    agent_environment:
+      skills: []
+      files:
+        - src: ../../.github/agents/project-planning/prd-builder.agent.md
+          dest: .github/agents/project-planning/prd-builder.agent.md
+        - src: ../../.github/agents/project-planning/brd-builder.agent.md
+          dest: .github/agents/project-planning/brd-builder.agent.md
+        - src: ../../.github/agents/hve-core/task-reviewer.agent.md
+          dest: .github/agents/hve-core/task-reviewer.agent.md
+        - src: fixtures/docs/discovery/import-retry-notes.md
+          dest: docs/discovery/import-retry-notes.md
+        - src: fixtures/docs/templates/quality-checklist.md
+          dest: docs/templates/quality-checklist.md
