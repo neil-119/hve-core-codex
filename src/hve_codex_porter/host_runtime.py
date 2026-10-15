@@ -278,6 +278,11 @@ def _codex_executable(command: str) -> tuple[str | None, str | None]:
             return _windows_npm_codex_native_executable(Path(located))
         if _is_native_windows() and Path(located).suffix.casefold() == ".bat":
             return None, "Batch command shims are not invoked because this probe does not start a shell"
+        if _is_native_windows():
+            try:
+                return str(Path(located).resolve()), None
+            except (OSError, RuntimeError):
+                pass
         return located, None
     candidate = Path(token).expanduser()
     if candidate.is_file():

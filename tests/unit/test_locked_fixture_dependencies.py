@@ -21,9 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE_ROOT))
 
 from hve_codex_porter.cli import main as cli_main, parser  # noqa: E402
-from hve_codex_porter.common import PortError  # noqa: E402
+from hve_codex_porter.common import PortError, is_canonical_var_alias  # noqa: E402
 from hve_codex_porter.locked_fixture_dependencies import (  # noqa: E402
     _archive_members,
+    _input_directory,
+    _reject_reparse_chain,
     package_roots_from_references,
     prepare_locked_fixture_dependencies,
     verify_prepared_fixture_dependencies,
@@ -186,6 +188,29 @@ class LockedFixtureDependencyTests(unittest.TestCase):
                 if getattr(error, "winerror", None) != 32 or time.monotonic() >= deadline:
                     raise
                 time.sleep(0.05)
+
+    def test_canonical_var_alias_is_only_accepted_as_an_ancestor(self) -> None:
+        if sys.platform != "darwin":
+            self.skipTest("macOS system path aliases are platform-specific")
+        self.assertTrue(is_canonical_var_alias(Path("/var")))
+        with self.assertRaisesRegex(PortError, "symlink or reparse point"):
+            _input_directory(Path("/var"), "Upstream source")
+
+    def test_source_root_and_arbitrary_child_symlinks_are_rejected(self) -> None:
+        linked_root = self.root / "upstream-link"
+        child_target = self.root / "outside"
+        child_link = self.upstream / "arbitrary-link"
+        child_target.mkdir()
+        try:
+            linked_root.symlink_to(self.upstream, target_is_directory=True)
+            child_link.symlink_to(child_target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("directory symlink creation is unavailable")
+
+        with self.assertRaisesRegex(PortError, "symlink or reparse point"):
+            _input_directory(linked_root, "Upstream source")
+        with self.assertRaisesRegex(PortError, "symlink or reparse point"):
+            _reject_reparse_chain(child_link, "Upstream source")
 
     def test_dependency_closure_uses_locked_tarballs_and_bundle_explicit_specs(self) -> None:
         receipt = prepare_locked_fixture_dependencies(

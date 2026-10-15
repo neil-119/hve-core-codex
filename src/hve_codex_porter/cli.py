@@ -24,8 +24,16 @@ def default_distribution() -> Path:
         return Path(configured).expanduser()
     return Path.home() / ".codex" / "hve-core-codex-distribution"
 
+class _ArgumentParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        parsed = super().parse_args(args, namespace)
+        if parsed.command in {"install", "update", "uninstall", "doctor"} and not hasattr(parsed, "scope"):
+            parsed.scope = "project"
+        return parsed
+
+
 def parser() -> argparse.ArgumentParser:
-    app = argparse.ArgumentParser(prog="hve-codex", description="Convert, inspect, and safely install HVE Core for Codex")
+    app = _ArgumentParser(prog="hve-codex", description="Convert, inspect, and safely install HVE Core for Codex")
     app.add_argument("--version", action="version", version="hve-codex 0.1.0")
     commands = app.add_subparsers(dest="command", required=True)
     for command in ("inventory", "convert"):
@@ -49,9 +57,9 @@ def parser() -> argparse.ArgumentParser:
     for command in ("install", "update", "uninstall", "doctor"):
         sub = commands.add_parser(command)
         scope = sub.add_mutually_exclusive_group()
-        scope.add_argument("--scope", choices=("project", "user"), default="project",
+        scope.add_argument("--scope", choices=("project", "user"), default=argparse.SUPPRESS,
                            help="Install for one project or for your user across repositories")
-        scope.add_argument("--global", dest="scope", action="store_const", const="user",
+        scope.add_argument("--global", dest="scope", action="store_const", const="user", default=argparse.SUPPRESS,
                            help="Use the shared user installation (alias for --scope user)")
         sub.add_argument("--target", type=Path)
         sub.add_argument("--codex-home", type=Path)

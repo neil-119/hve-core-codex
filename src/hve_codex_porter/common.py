@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 import unicodedata
 from datetime import date, datetime, time as datetime_time
 from typing import Any
@@ -11,6 +12,20 @@ from ruamel.yaml import YAML
 
 class PortError(ValueError):
     """An actionable conversion or installation failure."""
+
+
+def is_canonical_var_alias(path: Path) -> bool:
+    """Allow only macOS's canonical /var -> /private/var path alias.
+
+    Callers still reject symlinks at their selected root and below it. This
+    exception applies only to the system path prefix used by macOS temp dirs.
+    """
+    if sys.platform != "darwin" or path != Path("/var"):
+        return False
+    try:
+        return path.is_symlink() and path.resolve(strict=True) == Path("/private/var")
+    except OSError:
+        return False
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()

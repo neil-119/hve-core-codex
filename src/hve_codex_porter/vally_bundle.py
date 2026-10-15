@@ -74,6 +74,7 @@ def _dump_yaml(value: Any) -> bytes:
 
 
 def _source_id(path: Path, root: Path) -> str:
+    # Keep the lexical path so symlinks are reported by their in-tree name.
     return path.relative_to(root).as_posix()
 
 
@@ -583,11 +584,11 @@ def prepare_vally_bundle(
 
     artifact_manifest, manifest_bytes = _load_manifest(distribution_root)
     source_inventory = _load_source_inventory(distribution_root)
-    eval_files: list[dict[str, str]] = []
+    findings: list[dict[str, str]] = []
     conversion_errors: list[dict[str, str]] = []
     source_records: dict[str, dict[str, Any]] = {}
-    eval_paths = _walk_eval_files(upstream, eval_files)
-    custom_paths = _walk_eval_files(custom, eval_files) if custom is not None else []
+    eval_paths = _walk_eval_files(upstream, findings)
+    custom_paths = _walk_eval_files(custom, findings) if custom is not None else []
     if len(eval_paths) + len(custom_paths) > _MAX_FILES:
         raise PortError(f"Upstream eval tree exceeds {_MAX_FILES} files.")
 
@@ -618,7 +619,6 @@ def prepare_vally_bundle(
     config_source = upstream / ".vally.yaml"
     config_raw: bytes | None = None
     config_value: Any = None
-    findings: list[dict[str, str]] = []
     if config_source.is_symlink():
         findings.append({"code": "symlink-skipped", "source": ".vally.yaml", "severity": "error", "message": "The Vally config is a symlink and was not followed."})
     elif config_source.is_file():

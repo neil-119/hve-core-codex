@@ -168,13 +168,33 @@ def _normalize_target(value: str, repo_root: Path) -> str | None:
         return None
     candidate = candidate.replace("\\", "/")
     windows = PureWindowsPath(candidate)
-    if windows.is_absolute() or windows.drive:
+    if Path(candidate).is_absolute() or windows.is_absolute() or windows.drive:
         try:
-            absolute = Path(value.strip().strip("\"'" )).expanduser().resolve(strict=False)
-            relative = absolute.relative_to(repo_root.resolve())
+            absolute = Path(value.strip().strip("\"'")).expanduser().resolve(strict=False)
+            resolved_root = Path(repo_root).expanduser().resolve(strict=False)
+            try:
+                relative = absolute.relative_to(resolved_root)
+            except ValueError:
+                # Some filesystems expose the same directory through multiple
+                # names (for example, Windows 8.3 paths). Compare existing
+                # ancestors by file identity while keeping the path resolved
+                # so symlinks that escape the repository remain rejected.
+                for ancestor in (absolute, *absolute.parents):
+                    try:
+                        if os.path.samefile(ancestor, resolved_root):
+                            relative = absolute.relative_to(ancestor)
+                            break
+                    except OSError:
+                        continue
+                else:
+                    return None
         except (OSError, RuntimeError, ValueError):
             return None
         candidate = relative.as_posix()
+    elif windows.root:
+        # A rooted Windows path without a drive does not identify a location
+        # we can safely relate to the repository.
+        return None
     candidate = candidate.removeprefix("./")
     parts = [part for part in candidate.split("/") if part not in ("", ".")]
     if not parts or any(part == ".." for part in parts):

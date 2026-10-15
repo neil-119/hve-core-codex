@@ -240,12 +240,33 @@ def test_user_scope_uses_codex_home_and_quotes_local_hook_command(tmp_path: Path
     assert marketplace["plugins"][0]["source"]["path"] == "./codex home/plugins/hve-core-codex"
     command = json.loads((codex_home / "hooks.json").read_text(encoding="utf-8"))["hooks"]["SessionStart"][0]["hooks"][0]["command"]
     assert str((codex_home / "hooks" / "hve_rules.py").absolute()) in command
-    assert command.startswith(f'"{python.absolute()}" "{(codex_home / "hooks" / "hve_rules.py").absolute()}"')
+    script = codex_home / "hooks" / "hve_rules.py"
+    if installer_module.os.name == "nt":
+        expected_command_prefix = installer_module.subprocess.list2cmdline([str(python.absolute()), str(script.absolute())])
+    else:
+        expected_command_prefix = " ".join(
+            installer_module.shlex.quote(str(path.absolute())) for path in (python, script)
+        )
+    assert command.startswith(expected_command_prefix)
     assert (codex_home / "plugins" / "hve-core-codex" / "plugin.json").is_file()
     assert doctor(tmp_path / "ignored-target", scope="user", codex_home=codex_home, user_home=user_home)["status"] == "healthy"
     removed = uninstall(tmp_path / "ignored-target", scope="user", codex_home=codex_home, user_home=user_home)
     assert removed["status"] == "uninstalled"
     assert not (user_home / ".agents" / "plugins" / "marketplace.json").exists()
+
+
+def test_install_rejects_symlinked_scope_root(tmp_path: Path) -> None:
+    distribution = _distribution(tmp_path)
+    real_root = tmp_path / "real-root"
+    real_root.mkdir()
+    symlink_root = tmp_path / "linked-root"
+    try:
+        symlink_root.symlink_to(real_root, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("directory symlink creation is unavailable")
+
+    with pytest.raises(installer_module.InstallerError, match="symlink or reparse-point component"):
+        install(distribution, symlink_root)
 
 
 def test_custom_codex_home_requires_explicit_user_home_before_writing(tmp_path: Path) -> None:

@@ -26,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
+from .common import is_canonical_var_alias
+
 
 _MANIFEST_VERSION = 1
 _BEGIN = "<!-- BEGIN HVE CORE CODEX MANAGED SECTION -->"
@@ -1478,6 +1480,8 @@ def _reject_reparse_components(path: Path, stop: Path | None = None) -> None:
             continue
         reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
         if stat.S_ISLNK(mode) or attrs & reparse:
+            if component != absolute and is_canonical_var_alias(component):
+                continue
             raise InstallerError(f"Refusing path with a symlink or reparse-point component: {component}")
 
 

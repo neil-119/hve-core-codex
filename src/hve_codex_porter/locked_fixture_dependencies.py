@@ -22,7 +22,7 @@ from collections import deque
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .common import PortError, digest, dump_json, safe_path
+from .common import PortError, digest, dump_json, is_canonical_var_alias, safe_path
 
 
 RECEIPT_NAME = "fixture-dependencies.json"
@@ -57,6 +57,8 @@ def _reject_reparse_chain(path: Path, label: str) -> None:
     chain = [*reversed(absolute.parents), absolute]
     for item in chain:
         if _reparse(item):
+            if item != absolute and is_canonical_var_alias(item):
+                continue
             raise PortError(f"{label} contains a symlink or reparse point: {item}")
 
 

@@ -92,7 +92,7 @@ class HostRuntimeUtilityTests(unittest.TestCase):
             executable.write_bytes(b"fixture")
             resolved, error = _codex_executable(str(executable))
             self.assertIsNone(error)
-            self.assertEqual(Path(resolved), executable.resolve())
+            self.assertTrue(Path(resolved).samefile(executable))
             resolved, error = _codex_executable(str(executable) + " --unsafe-argument")
             self.assertIsNone(resolved)
             self.assertIsNotNone(error)
@@ -1410,6 +1410,7 @@ class EvaluationRunnerTests(unittest.TestCase):
         with (
             patch("hve_codex_porter.host_runtime.subprocess.Popen", return_value=process) as popen,
             patch("hve_codex_porter.host_runtime._existing_project_is_trusted", return_value=True),
+            patch("hve_codex_porter.host_runtime._is_native_windows", return_value=True),
         ):
             result = _execute_codex_turn(
                 "codex-test", self.root, "inspect", session_id=None, timeout_seconds=10,
@@ -1927,6 +1928,7 @@ class EvaluationRunnerTests(unittest.TestCase):
                 "hve_codex_porter.host_acceptance._native_workspace_read_files",
                 return_value=({relative: content}, []),
             ) as native_read,
+            patch("hve_codex_porter.host_acceptance._is_native_windows", return_value=True),
         ):
             result = _check_result(
                 "golden-path-03",

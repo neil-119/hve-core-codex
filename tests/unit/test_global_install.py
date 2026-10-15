@@ -17,8 +17,10 @@ def test_global_scope_alias_and_conflicting_flags(command: str) -> None:
     assert parser().parse_args([command, "--global"]).scope == "user"
     assert parser().parse_args([command, "--scope", "user"]).scope == "user"
     assert parser().parse_args([command]).scope == "project"
-    with pytest.raises(SystemExit):
-        parser().parse_args([command, "--global", "--scope", "project"])
+    for flags in (["--global", "--scope", "project"], ["--scope", "project", "--global"],
+                  ["--global", "--scope", "user"]):
+        with pytest.raises(SystemExit):
+            parser().parse_args([command, *flags])
 
 
 def test_global_cli_lifecycle_and_hook_routing_across_repositories(tmp_path: Path, monkeypatch, capsys) -> None:

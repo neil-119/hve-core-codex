@@ -161,7 +161,9 @@ class HookRuntimeTests(unittest.TestCase):
         (self.rules_dir / "index.json").replace(codex_rules / "index.json")
         (self.rules_dir / "style.md").replace(codex_rules / "style.md")
 
-        self.assertEqual(find_registry_root(self.root), self.root / ".codex")
+        registry_root = find_registry_root(self.root)
+        self.assertIsNotNone(registry_root)
+        self.assertTrue(registry_root.samefile(self.root / ".codex"))
 
     def test_session_and_subagent_start_return_small_indexing_guidance(self) -> None:
         self.write_registry()
