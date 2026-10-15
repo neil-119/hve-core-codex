@@ -229,6 +229,19 @@ class HookRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(absolute_paths, ["src/app.py"])
 
+        short_name_root = self.root / "RUNNER~1"
+        short_name_root.mkdir()
+        short_name_target = short_name_root / "src" / "app.py"
+        short_name_paths, _ = extract_tool_paths(
+            "Bash", {"command": f'cat "{short_name_target}"'}, self.root
+        )
+        self.assertEqual(short_name_paths, ["RUNNER~1/src/app.py"])
+
+        home_expansion_paths, _ = extract_tool_paths(
+            "Bash", {"command": "cat ~/src/app.py"}, self.root
+        )
+        self.assertEqual(home_expansion_paths, [])
+
         variable_paths, uncertain = extract_tool_paths(
             "Bash", {"command": 'rm -rf "$TARGET/src/app.py"'}, self.root
         )
