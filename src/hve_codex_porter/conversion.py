@@ -337,7 +337,13 @@ def _convert(upstream: Path, output: Path, provenance: dict, mappings: Path) -> 
     for filename, source in (("hve_rules.py", "hook_runtime.py"), ("rules.py", "rules.py")):
         if (package_root / source).exists():
             text_write(output / "codex-overlay/hooks" / filename, (package_root / source).read_text(encoding="utf-8"))
-    dump_json(output / "codex-overlay/hooks/hooks.json", {"hooks": {event: [{"hooks": [{"type": "command", "command": "python HVE_HOOK_SCRIPT", "statusMessage": "Loading HVE scoped rules"}]}] for event in ("SessionStart", "SubagentStart", "UserPromptSubmit", "PreToolUse")}})
+    hook_labels = {
+        "SessionStart": "HVE: Load guidance at session start",
+        "SubagentStart": "HVE: Load guidance for a subagent",
+        "UserPromptSubmit": "HVE: Load guidance for your prompt",
+        "PreToolUse": "HVE: Load scoped rules before tool use",
+    }
+    dump_json(output / "codex-overlay/hooks/hooks.json", {"hooks": {event: [{"hooks": [{"type": "command", "command": "python HVE_HOOK_SCRIPT", "statusMessage": label}]}] for event, label in hook_labels.items()}})
     version = next((m["metadata"].get("version") for m in inventory["manifests"] if m["metadata"].get("version")), None) or "0.0.0"
     dump_json(output / PLUGIN / "plugin.json", {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "hve-core-codex", "version": version + "-codex.1", "description": "Independent Codex adaptation of Microsoft HVE Core workflows; no Microsoft endorsement.", "license": "SEE LICENSE AND THIRD-PARTY-NOTICES.md", "extensions": {"com.openai": {}}})
     dump_json(output / ".agents/plugins/marketplace.json", {"name": "hve-core-codex-local", "interface": {"displayName": "HVE Core for Codex"}, "plugins": [{"name": "hve-core-codex", "source": {"source": "local", "path": "./plugins/hve-core-codex"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"}]})

@@ -84,3 +84,31 @@ def test_release_install_uses_persistent_tool_and_selected_project(tmp_path):
     assert "--global" not in command
     assert "PYTHONPATH" not in run.call_args_list[1].kwargs["env"]
     assert "PYTHONHOME" not in run.call_args_list[1].kwargs["env"]
+
+
+@pytest.mark.parametrize("project", [False, True])
+def test_uninstall_uses_existing_tool_without_downloading_or_reinstalling(tmp_path, project):
+    executable = tmp_path / "hve-core-codex" / ("Scripts/hve-codex.exe" if installer.os.name == "nt" else "bin/hve-codex")
+    executable.parent.mkdir(parents=True)
+    executable.touch()
+    args = ["--uninstall", "--dry-run"]
+    if project:
+        args += ["--target", str(tmp_path)]
+    with patch.object(installer, "select_release") as select, \
+         patch.object(installer.subprocess, "check_output", return_value=str(tmp_path)), \
+         patch.object(installer.subprocess, "run") as run:
+        assert installer.main(args) == 0
+    select.assert_not_called()
+    run.assert_called_once()
+    assert run.call_args.args[0] == [str(executable), "uninstall", *(["--target", str(tmp_path)] if project else ["--global"]), "--dry-run"]
+    assert "PYTHONPATH" not in run.call_args.kwargs["env"]
+
+
+def test_uninstall_missing_tool_does_not_download(tmp_path):
+    with patch.object(installer, "select_release") as select, \
+         patch.object(installer.subprocess, "check_output", return_value=str(tmp_path)), \
+         patch.object(installer.subprocess, "run") as run:
+        with pytest.raises(ValueError, match="not installed"):
+            installer.main(["--uninstall"])
+    select.assert_not_called()
+    run.assert_not_called()

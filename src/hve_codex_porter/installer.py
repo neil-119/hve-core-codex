@@ -999,11 +999,10 @@ def _plan_json_hooks(
 
     base = json.loads(json.dumps(original))
     if previous:
-        base_bytes, safe = _remove_json_hooks_from_value(base, previous)
+        remaining, safe = _remove_json_hooks_from_value(base, previous)
         if not safe:
             return None, "previously managed hook entries were modified or are ambiguous"
-        if base_bytes is None:
-            base = {}
+        base = remaining if remaining is not None else {}
 
     hooks_value = base.get("hooks", {})
     if not isinstance(hooks_value, dict):

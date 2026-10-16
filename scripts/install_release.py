@@ -132,11 +132,29 @@ def main(argv=None) -> int:
     parser.add_argument("--release", default="stable", help="stable, edge, or an exact published release tag")
     parser.add_argument("--target", type=Path, help="Install for one existing project instead of globally")
     parser.add_argument("--no-plugin", action="store_true")
-    parser.add_argument("--update", action="store_true")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--update", action="store_true", help="Replace the existing managed installation")
+    action.add_argument("--uninstall", action="store_true", help="Remove the installed integration without downloading a release")
     parser.add_argument("--dry-run", action="store_true", help="Preview distribution changes; tool installation is still required")
     args = parser.parse_args(argv)
     if args.target and not args.target.is_dir():
         parser.error("--target must be an existing project directory.")
+    tool_environment = os.environ.copy()
+    tool_environment.pop("PYTHONPATH", None)
+    tool_environment.pop("PYTHONHOME", None)
+    if args.uninstall:
+        if args.no_plugin:
+            parser.error("--no-plugin cannot be combined with --uninstall; owned plugin entries are removed automatically.")
+        tool_root = Path(subprocess.check_output(["uv", "tool", "dir"], text=True).strip())
+        executable = tool_root / "hve-core-codex" / ("Scripts/hve-codex.exe" if os.name == "nt" else "bin/hve-codex")
+        if not executable.is_file():
+            raise ValueError("HVE installer tool is not installed. Uninstall using the original installer environment.")
+        command = [str(executable), "uninstall"]
+        command += ["--target", str(args.target)] if args.target else ["--global"]
+        if args.dry_run:
+            command.append("--dry-run")
+        subprocess.run(command, check=True, env=tool_environment)
+        return 0
     release = select_release(args.release)
     assets = {item["name"]: item for item in release.get("assets", [])}
     wheels = [name for name in assets if re.fullmatch(r"hve_core_codex-[A-Za-z0-9_.]+-py3-none-any\.whl", name)]
@@ -161,9 +179,6 @@ def main(argv=None) -> int:
             command.append("--no-plugin")
         if args.dry_run:
             command.append("--dry-run")
-        tool_environment = os.environ.copy()
-        tool_environment.pop("PYTHONPATH", None)
-        tool_environment.pop("PYTHONHOME", None)
         subprocess.run(command, check=True, env=tool_environment)
     return 0
 

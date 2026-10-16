@@ -40,6 +40,37 @@ def _distribution(base: Path) -> Path:
     return distribution
 
 
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_repeated_label_updates_replace_hooks_and_uninstall_preserves_user_entries(tmp_path: Path, scope: str) -> None:
+    distribution = _distribution(tmp_path)
+    target = tmp_path / "repo"
+    target.mkdir()
+    user_home = tmp_path / "home"
+    codex_home = user_home / ".codex"
+    options = {"scope": scope}
+    if scope == "user":
+        options.update(codex_home=codex_home, user_home=user_home)
+    hooks_path = (codex_home if scope == "user" else target / ".codex") / "hooks.json"
+    user_entry = {"hooks": [{"type": "command", "command": "user command"}]}
+    original = {"hooks": {"PreToolUse": [user_entry]}, "user": {"keep": True}}
+    _write(hooks_path, json.dumps(original))
+    assert install(distribution, target, **options)["status"] == "installed"
+    source = distribution / "codex-overlay/hooks/hooks.json"
+    hooks = json.loads(source.read_text(encoding="utf-8"))
+    for event, entries in hooks["hooks"].items():
+        entries[0]["hooks"][0]["statusMessage"] = f"HVE: {event}"
+    _write(source, json.dumps(hooks))
+    for _ in range(2):
+        assert update(distribution, target, **options)["status"] == "updated"
+        installed = json.loads(hooks_path.read_text(encoding="utf-8"))
+        for event in hooks["hooks"]:
+            entries = installed["hooks"][event]
+            assert len(entries) == (2 if event == "PreToolUse" else 1)
+            assert entries[-1]["hooks"][0]["statusMessage"] == f"HVE: {event}"
+    assert uninstall(target, **options)["status"] == "uninstalled"
+    assert json.loads(hooks_path.read_text(encoding="utf-8")) == original
+
+
 def test_full_install_materializes_managed_overlay_and_registers_plugin(tmp_path: Path) -> None:
     distribution = _distribution(tmp_path)
     target = tmp_path / "repo"

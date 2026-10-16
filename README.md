@@ -36,6 +36,32 @@ Add `--target "/path/to/project"` for a project-only install, `--no-plugin` for 
 
 Restart Codex, install/enable **HVE Core for Codex** from Plugins if prompted, and review the hooks through Codex's normal trust controls (`/hooks` in the CLI). [Building and advanced setup](docs/development.md) are for developers.
 
+### Update
+
+Close your Codex sessions, then update to the newest published edge release:
+
+```sh
+uv run https://raw.githubusercontent.com/neil-119/hve-core-codex/main/scripts/install_release.py --release edge --update
+```
+
+Use `--release stable` or an exact release tag to choose another version. For a project-only installation, include the same `--target` used when installing. Updates replace the managed registrations, so running an update repeatedly does not add extra hooks or plugin registrations. Unrelated settings are preserved; conflicting local edits are reported. Restart Codex afterward and review any new hook trust prompts. The four hooks have distinct labels for session start, subagent start, prompt submission, and tool use.
+
+### Uninstall
+
+Close your Codex sessions, then remove the global HVE integration:
+
+```sh
+uv run https://raw.githubusercontent.com/neil-119/hve-core-codex/main/scripts/install_release.py --uninstall
+```
+
+Add `--target "/path/to/project"` to remove a project-only installation instead. Add `--dry-run` to preview removal. This uses your existing installer without downloading a release. It removes owned files, hook entries, and plugin registrations, while preserving unrelated settings, locally edited files, and recovery backups. Review any reported conflicts. Restart Codex afterward.
+
+Once all global and project installations are removed, optionally remove the installer itself:
+
+```sh
+uv tool uninstall hve-core-codex
+```
+
 ### Codex CLI
 
 Install and sign in using the [official CLI setup guide](https://learn.chatgpt.com/docs/codex/cli). Then:
