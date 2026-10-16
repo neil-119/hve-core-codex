@@ -4,26 +4,32 @@ An **unofficial port of [Microsoft HVE Core](https://github.com/microsoft/hve-co
 
 We take HVE Core’s original files and run them through a **deterministic converter**—the same inputs produce the same output. It translates skills, agents, prompts, instructions, and supporting files into formats Codex understands, and adds hooks that help load the right guidance. The original source is retained, and compatibility changes are recorded for review.
 
-This repository contains the builder, not the migrated documents. The build fetches HVE Core and writes the distribution and its originals outside this repository.
+Bring HVE Core's guided workflows to both Codex CLI and desktop.
 
-Stable follows Microsoft’s published releases. Edge follows the newest work on `main`. The GitHub workflow checks both weekly for reviewed updates.
+| Codex CLI | Codex desktop |
+| --- | --- |
+| <img src="img/codex_cli.png" alt="Codex CLI suggesting HVE Core RPI workflows" width="480"> | <img src="img/codex_desktop.png" alt="Codex desktop suggesting HVE Core RPI workflows" width="480"> |
+
+**How it works**: The GH Actions workflow periodically fetches HVE Core and migrates the distribution into a packaged release. Stable follows Microsoft’s published releases. Edge follows the newest work on `main`. The GitHub workflow checks both weekly for updates.
+
+The current HVE Core upstream golden eval set pass rate is about ~59%. Microsoft's eval set uses certain regular expressions and mannerism detections that are fine-tuned for Claude Haiku. There may also be semantic errors, but the core workflows are functional.
 
 ## Quickstart
 
 ### Install once for all your projects
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run one command in PowerShell or your terminal. No Git, WSL, or source build is needed:
-
-```sh
-uv run https://raw.githubusercontent.com/neil-119/hve-core-codex/main/scripts/install_release.py
-```
-
-This installs the latest published **stable** release globally, including the plugin, agents, and hooks. It downloads the release ZIP and installer, checks their SHA-256, and preserves existing Codex settings. Release assets must be published before these commands can work.
-
-Choose **edge** (the latest published development snapshot):
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run one command in PowerShell or your terminal:
 
 ```sh
 uv run https://raw.githubusercontent.com/neil-119/hve-core-codex/main/scripts/install_release.py --release edge
+```
+
+This installs the latest published **edge** release globally, including the plugin, agents, and hooks. It downloads the release ZIP and installer, checks their SHA-256, and preserves existing Codex settings.
+
+For the older stable release:
+
+```sh
+uv run https://raw.githubusercontent.com/neil-119/hve-core-codex/main/scripts/install_release.py
 ```
 
 Or pin an exact tag from [our releases](https://github.com/neil-119/hve-core-codex/releases):
@@ -141,3 +147,6 @@ Send these prompts one at a time in the same chat, replacing the skill line with
 Stable pairs these stages with the `task-researcher`, `task-planner`, `task-implementor`, and `task-reviewer` agents. Edge's full workflow uses the `rpi-agent` role. You can also ask directly: “Use the functional-code-review agent to review my changes without editing them.”
 
 For more workflow ideas, see [Microsoft’s HVE Core guidance](https://github.com/microsoft/hve-core). See [how the port works](ELI5.md) or [our setup guide](docs/development.md) for more detail.
+
+## LICENSE
+See [LICENSE](./LICENSE) and [THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES.md).
