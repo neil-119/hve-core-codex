@@ -322,18 +322,18 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Download external build artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
-        with:
-          name: hve-core-${{ needs.build.outputs.channel }}-${{ needs.build.outputs.source_sha }}
-          path: candidate
-
       - name: Check out the protected target branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ needs.build.outputs.target_branch }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Download external build artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: hve-core-${{ needs.build.outputs.channel }}-${{ needs.build.outputs.source_sha }}
+          path: candidate
 
       - name: Commit only source-lock metadata and open a draft review PR
         env:
@@ -383,6 +383,6 @@ jobs:
 
           The current source-only workflow does not transport reviewer-authored runtime capture files into the rebuilt external distribution. Stable release eligibility remains fail-closed until a reviewed evidence-delivery path supplies those files and their envelope.
 
-          This PR is created with the repository's built-in workflow token, so GitHub will not automatically start other workflows from its bot-authored PR events. Start required checks manually with `gh workflow run validate.yml --ref $branch`, then keep human review mandatory.
+          This PR is created with the repository's built-in workflow token, so GitHub will not automatically start other workflows from its bot-authored PR events. Start required checks manually with \`gh workflow run validate.yml --ref $branch\`, then keep human review mandatory.
           EOF
           gh pr create --repo "$GITHUB_REPOSITORY" --base "$TARGET_BRANCH" --head "$branch" --draft --title "chore(sync): $CHANNEL upstream $SOURCE_SHA" --body-file "$body"
