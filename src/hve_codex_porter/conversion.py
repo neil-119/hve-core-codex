@@ -275,7 +275,9 @@ def _convert(upstream: Path, output: Path, provenance: dict, mappings: Path) -> 
                 capability in {"filesystem-write", "filesystem-access", "shell-execution"}
                 for capability in allowed_capabilities
             )
-            text_write(output / output_path, render_agent(name, description, instructions, read_only, source_tools))
+            text_write(output / output_path, render_agent(name, description, instructions, read_only, source_tools, reasoning_effort=meta.get("reasoning-effort")))
+            if "reasoning-effort" in meta:
+                limitations.append("Native reasoning effort availability depends on the selected Codex model and client; configured intent is preserved without runtime verification.")
             if source_tools is not None:
                 limitations.append("Source tool allowlist is preserved as instruction policy; native per-tool enforcement is not verified.")
             if a["user_invocable"]:
