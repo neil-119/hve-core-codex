@@ -1,0 +1,9 @@
+{
+  "adapter_revision": "7d55a64ccf7914fdf4ec4bfe6f176a6e8ad3eeb3",
+  "build_inputs_sha256": "176f36930b2701b4ff0b17068f884833865ff29eb36b3dd7390f745f614fd721",
+  "builder_commit": "cc819947b4b5b87346dba748aa171b8033c7e43a",
+  "channel": "stable",
+  "schema_version": 1,
+  "upstream_ref": "hve-core-v3.2.2",
+  "upstream_sha": "e69486a5f809ede45c63c0a31358c12912bd5168"
+}
