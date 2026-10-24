@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
+import pytest
 from ruamel.yaml import YAML
 
 
@@ -24,6 +27,38 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 def _load_workflow(name: str) -> dict:
     return YAML(typ="safe").load((WORKFLOWS / name).read_text(encoding="utf-8"))
+
+
+@pytest.mark.skipif(os.name == "nt" or not shutil.which("jq"), reason="Requires POSIX bash and jq")
+@pytest.mark.parametrize("event", ["schedule", "workflow_dispatch"])
+@pytest.mark.parametrize("state", ["missing", "unprotected", "protected", "api-error"])
+def test_channel_preflight_skips_only_scheduled_setup_gaps(tmp_path, event, state):
+    workflow = _load_workflow("sync-upstream.yml")
+    script = workflow["jobs"]["preflight"]["steps"][0]["run"]
+    response = {"missing": "", "unprotected": '{"protected":false}', "protected": '{"protected":true}', "api-error": ""}[state]
+    env = os.environ | {
+        "CHANNEL": "edge", "GITHUB_REPOSITORY": "owner/repo", "GITHUB_EVENT_NAME": event,
+        "GITHUB_OUTPUT": str(tmp_path / "output"), "GITHUB_STEP_SUMMARY": str(tmp_path / "summary"),
+        "BRANCH_RESPONSE": response, "API_STATUS": "1" if state == "api-error" else "0",
+    }
+    stub = 'gh() { printf "%s" "$BRANCH_RESPONSE"; return "$API_STATUS"; }\n'
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", stub + script], env=env, capture_output=True, text=True)
+    expected_success = state == "protected" or (event == "schedule" and state != "api-error")
+    assert (result.returncode == 0) == expected_success
+    output = tmp_path / "output"
+    if state != "api-error":
+        assert output.read_text().strip() == f"ready={'true' if state == 'protected' else 'false'}"
+    if state in {"missing", "unprotected"}:
+        assert "No sync or publication was attempted" in (tmp_path / "summary").read_text()
+
+
+def test_unconfigured_channels_cannot_reach_build_or_publication():
+    sync = _load_workflow("sync-upstream.yml")
+    weekly = _load_workflow("weekly-sync.yml")
+    assert sync["jobs"]["build"]["needs"] == "preflight"
+    assert sync["jobs"]["build"]["if"] == "needs.preflight.outputs.ready == 'true'"
+    for channel in ("stable", "edge"):
+        assert weekly["jobs"][f"publish-{channel}"]["if"] == f"needs.sync-{channel}.outputs.ready == 'true'"
 
 
 def test_weekly_schedule_checks_stable_and_edge_only():

@@ -36,6 +36,7 @@ jobs:
   publish-stable:
     name: Publish the latest reviewed stable only if changed
     needs: sync-stable
+    if: needs.sync-stable.outputs.ready == 'true'
     uses: ./.github/workflows/publish.yml
     with:
       channel: stable
@@ -47,6 +48,7 @@ jobs:
   publish-edge:
     name: Publish the latest reviewed edge only if changed
     needs: sync-edge
+    if: needs.sync-edge.outputs.ready == 'true'
     uses: ./.github/workflows/publish.yml
     with:
       channel: edge
