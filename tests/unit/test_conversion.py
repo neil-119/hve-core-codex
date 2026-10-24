@@ -79,6 +79,28 @@ def test_python_resource_guidance_preserves_scripts_and_does_not_apply_to_plain_
     assert all((output / original).read_bytes() == script for original in source_map[source]["originals"])
 
 
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max", "ultra"])
+def test_agent_reasoning_effort_is_preserved_in_native_profile(upstream, tmp_path, effort):
+    source = upstream / ".github/agents/guide.agent.md"
+    original = source.read_text(encoding="utf-8")
+    source.write_text(original.replace("name: Guide\n", f"name: Guide\nreasoning-effort: {effort}\n"), encoding="utf-8")
+    output = tmp_path / "distribution"
+    report = convert(upstream, output, {"upstream_sha": "a" * 40, "upstream_ref": "main", "channel": "edge"}, ROOT / "mappings")
+    role = tomlkit.parse((output / "codex-overlay/agents/guide.toml").read_text(encoding="utf-8"))
+    assert role["model_reasoning_effort"] == effort
+    assert not any(item.get("field") == "reasoning-effort" for item in report["unknown_fields"])
+    assert validate(output, ROOT / "schemas/plugin.schema.json")["valid"]
+
+
+@pytest.mark.parametrize("effort", ["unsupported", "MAX", "null", "true", "[max]", "42"])
+def test_invalid_agent_reasoning_effort_stops_conversion(upstream, tmp_path, effort):
+    source = upstream / ".github/agents/guide.agent.md"
+    original = source.read_text(encoding="utf-8")
+    source.write_text(original.replace("name: Guide\n", f"name: Guide\nreasoning-effort: {effort}\n"), encoding="utf-8")
+    with pytest.raises(PortError, match="reasoning-effort must be one of"):
+        convert(upstream, tmp_path / "distribution", {"upstream_sha": "a" * 40}, ROOT / "mappings")
+
+
 def test_complete_inventory_and_deterministic_conversion(upstream, tmp_path):
     provenance = {"upstream_ref": "v1", "upstream_sha": "a" * 40, "channel": "stable"}
     outputs = [tmp_path / "first", tmp_path / "second"]

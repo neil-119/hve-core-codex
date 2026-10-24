@@ -14,10 +14,12 @@ from .references import references
 
 KNOWN_FIELDS = {
     "skill": {"name", "description", "license", "compatibility", "metadata", "allowed-tools", "user-invocable", "disable-model-invocation", "argument-hint"},
-    "agent": {"name", "description", "agents", "tools", "handoffs", "argument-hint", "user-invocable", "disable-model-invocation", "model", "target", "mcp-servers"},
+    "agent": {"name", "description", "agents", "tools", "handoffs", "argument-hint", "user-invocable", "disable-model-invocation", "model", "target", "mcp-servers", "reasoning-effort"},
     "instruction": {"applyTo", "description", "name", "excludeAgent", "metadata"},
     "prompt": {"name", "description", "agent", "mode", "model", "tools", "argument-hint", "metadata"},
 }
+
+REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max", "ultra")
 
 def git(root: Path, *args: str) -> str:
     cmd = ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.autocrlf=false", "-c", "core.eol=lf"]
@@ -123,6 +125,10 @@ def _validate_frontmatter_types(meta: dict, source: str) -> None:
     for field in ("name", "description", "argument-hint"):
         if field in meta and not isinstance(meta[field], str):
             invalid(field, "a string")
+    if "reasoning-effort" in meta and (
+        not isinstance(meta["reasoning-effort"], str) or meta["reasoning-effort"] not in REASONING_EFFORTS
+    ):
+        invalid("reasoning-effort", "one of " + ", ".join(REASONING_EFFORTS))
     for field in ("user-invocable", "disable-model-invocation"):
         if field in meta and not isinstance(meta[field], bool):
             invalid(field, "a boolean")
