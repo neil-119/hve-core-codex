@@ -8,6 +8,7 @@ import jsonschema
 from .common import digest, frontmatter, safe_path, text_write
 from .references import references
 from .security import credential_findings
+from .release import HASH_EXCLUDED_PATHS
 
 GENERATED_ROOTS = ("plugins/hve-core-codex", "codex-overlay", "generated", ".agents/plugins")
 
@@ -20,7 +21,8 @@ def distribution_files(root: Path) -> list[Path]:
     return sorted(result, key=lambda p: p.relative_to(root).as_posix())
 
 def write_checksums(root: Path) -> dict[str, str]:
-    hashes = {p.relative_to(root).as_posix(): digest(p.read_bytes()) for p in distribution_files(root)}
+    hashes = {p.relative_to(root).as_posix(): digest(p.read_bytes()) for p in distribution_files(root)
+              if p.relative_to(root).as_posix() not in HASH_EXCLUDED_PATHS}
     text_write(root / "generated/checksums.txt", "".join(f"{value}  {path}\n" for path, value in hashes.items()))
     return hashes
 
@@ -186,7 +188,7 @@ def validate(root: Path, schema: Path | None = None, verify_checksums: bool = Tr
                 path = safe_path(root, relative)
                 if not path.is_file() or digest(path.read_bytes()) != expected:
                     errors.append(f"Checksum mismatch: {relative}")
-            if known != expected_paths:
+            if known - HASH_EXCLUDED_PATHS != expected_paths:
                 errors.append("Checksummed file inventory differs from distribution")
     report_file = root / "generated/compatibility-report.json"
     blockers = json.loads(report_file.read_text(encoding="utf-8"))["release_blockers"] if report_file.is_file() else [{"code": "report-missing"}]

@@ -13,6 +13,7 @@ const MAX_PATTERN_CHARS = 256;
 const MAX_GREP_MATCHES = 256;
 const MAX_GREP_LINE_CHARS = 2_000;
 const REGEX_TIMEOUT_MS = 250;
+const REGEX_STARTUP_TIMEOUT_MS = 5_000;
 
 const REGEX_WORKER_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
@@ -282,7 +283,11 @@ async function boundedRegexSearch(pattern, content) {
     worker.once('exit', code => {
       if (!settled) finish(new Error(`Regex worker exited before returning a result (code ${code})`));
     });
-    timer = setTimeout(() => finish(new Error(`Regex search exceeded ${REGEX_TIMEOUT_MS} ms`)), REGEX_TIMEOUT_MS);
+    worker.once('online', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => finish(new Error(`Regex search exceeded ${REGEX_TIMEOUT_MS} ms`)), REGEX_TIMEOUT_MS);
+    });
+    timer = setTimeout(() => finish(new Error('Regex worker startup exceeded 5000 ms')), REGEX_STARTUP_TIMEOUT_MS);
   });
 }
 
