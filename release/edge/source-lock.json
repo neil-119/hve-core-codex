@@ -1,0 +1,9 @@
+{
+  "adapter_revision": "7d55a64ccf7914fdf4ec4bfe6f176a6e8ad3eeb3",
+  "build_inputs_sha256": "176f36930b2701b4ff0b17068f884833865ff29eb36b3dd7390f745f614fd721",
+  "builder_commit": "da504c6977fcb9819d7e5edf8f204e3e61218a0b",
+  "channel": "edge",
+  "schema_version": 1,
+  "upstream_ref": "main",
+  "upstream_sha": "6cd810c7b9448d98ea07db0a7a9124824d32dacc"
+}
