@@ -47,10 +47,12 @@ def source_tool_policy(capabilities: list[dict] | None) -> str:
         lines.append(f"- Source operation `{item['tool']}`: {item['instruction']}\n")
     return "".join(lines)
 
-def render_agent(name: str, description: str, instructions: str, read_only: bool, source_tools: list[dict] | None = None) -> str:
+def render_agent(name: str, description: str, instructions: str, read_only: bool, source_tools: list[dict] | None = None, *, reasoning_effort: str | None = None) -> str:
     doc = tomlkit.document()
     doc["name"] = name
     doc["description"] = description
+    if reasoning_effort is not None:
+        doc["model_reasoning_effort"] = reasoning_effort
     if read_only:
         doc["sandbox_mode"] = "read-only"
     doc["developer_instructions"] = instructions + source_tool_policy(source_tools)
