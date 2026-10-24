@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from hve_codex_porter.common import PortError
+from hve_codex_porter.release import write_checksums, write_release_manifest
 from test_conversion import upstream  # noqa: F401 -- shared synthetic-source fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,6 +52,17 @@ def test_build_generates_external_distribution_and_can_finalize_archive(upstream
     assert (output / "generated/provenance.json").is_file()
     assert (tmp_path / "distribution.tar.gz.sha256").is_file()
     assert builder.main(["--output", str(output), "--archive-only"]) == 0
+    write_release_manifest(output, {"schema_version": 1, "channel": "stable"})
+    write_checksums(output)
+    assert builder.main(["--output", str(output), "--archive-only"]) == 0
+    with zipfile.ZipFile(tmp_path / "distribution.zip") as archive:
+        assert "generated/release-manifest.json" in archive.namelist()
+    plugin = output / "plugins/hve-core-codex/plugin.json"
+    original = plugin.read_bytes()
+    plugin.write_bytes(original + b"\n")
+    with pytest.raises(PortError, match="structural validation"):
+        builder.main(["--output", str(output), "--archive-only"])
+    plugin.write_bytes(original)
     provenance = json.loads((output / "generated/provenance.json").read_text())
     assert provenance["upstream_sha"] == "a" * 40
     with pytest.raises(PortError, match="disagrees"):
