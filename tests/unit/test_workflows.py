@@ -118,6 +118,9 @@ def test_sync_builds_external_distribution_and_only_opens_metadata_pr():
     assert sync["jobs"]["build"]["outputs"]["build_inputs_sha256"] == "${{ steps.select.outputs.build_inputs_sha256 }}"
     assert "does not transport reviewer-authored runtime capture files" in sync["jobs"]["open-metadata-pr"]["steps"][-1]["run"]
     pr_steps = sync["jobs"]["open-metadata-pr"]["steps"]
+    checkout_index = next(index for index, step in enumerate(pr_steps) if step.get("uses", "").startswith("actions/checkout@"))
+    download_index = next(index for index, step in enumerate(pr_steps) if step.get("uses", "").startswith("actions/download-artifact@"))
+    assert checkout_index < download_index
     commit_step = next(step for step in pr_steps if step.get("name", "").startswith("Commit only source-lock"))
     assert 'git add -- "release/$CHANNEL/source-lock.json" "release/$CHANNEL/release-manifest.json" "release/$CHANNEL/checksums.txt"' in commit_step["run"]
     assert "generated/" not in commit_step["run"]
@@ -128,6 +131,7 @@ def test_sync_builds_external_distribution_and_only_opens_metadata_pr():
     assert not any("create-github-app-token@" in step.get("uses", "") for step in pr_steps)
     assert commit_step["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
     assert "GitHub will not automatically start other workflows" in commit_step["run"]
+    assert r"\`gh workflow run validate.yml --ref $branch\`" in commit_step["run"]
 
 
 def test_publisher_attaches_zip_and_verified_installer_assets():
