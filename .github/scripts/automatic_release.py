@@ -45,12 +45,24 @@ def published_source_valid(release: dict, source_sha: str, channel: str) -> None
 def tag_for(channel: str, source: dict, revision: int = 1) -> str:
     """Derive an immutable tag from a validated upstream source."""
     sha = validate_git_sha(source["source_sha"], field="upstream SHA")
+    if not isinstance(revision, int) or isinstance(revision, bool) or not 1 <= revision <= 10000:
+        raise ReleaseError("Port revision must be a positive bounded integer.")
     if channel == "edge":
         return f"hve-core-edge-{sha}-codex.{revision}"
     version = source["upstream_manifest_version"]
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?", version):
         raise ReleaseError("Stable source must have a non-prerelease semantic version.")
     return f"hve-core-v{version}-codex.{revision}"
+
+
+def choose_revision(channel: str, source: dict, refs: list[dict], port_commit: str) -> int:
+    """Reuse same-commit attempts or allocate a new revision without moving tags."""
+    existing = {ref["ref"]: ref["object"] for ref in refs}
+    for revision in range(1, 10001):
+        target = existing.get("refs/tags/" + tag_for(channel, source, revision))
+        if target is None or (target.get("type") == "commit" and target.get("sha") == port_commit):
+            return revision
+    raise ReleaseError("No available immutable port revision.")
 
 
 def output(**values) -> None:
@@ -96,6 +108,13 @@ def select(channel: str) -> None:
             published_source_valid(release, sha, channel)
             output(changed="false")
             return
+    version = re.fullmatch(r"(?:hve-core-)?v?([0-9]+\.[0-9]+\.[0-9]+(?:\+[0-9A-Za-z.-]+)?)", source["source_ref"])
+    if channel == "stable" and not version:
+        raise ReleaseError("Latest stable upstream tag has an unsupported version format.")
+    tag_source = {"source_sha": sha, "upstream_manifest_version": version.group(1) if version else ""}
+    prefix = tag_for(channel, tag_source).rsplit(".", 1)[0] + "."
+    refs = gh("api", f"repos/{repo}/git/matching-refs/tags/{prefix}")
+    source["port_revision"] = choose_revision(channel, tag_source, refs, os.environ["GITHUB_SHA"])
     Path(os.environ["RUNNER_TEMP"], "selected-source.json").write_text(json.dumps(source), encoding="utf-8")
     output(changed="true", source_sha=sha, source_ref=source["source_ref"])
 
@@ -135,7 +154,8 @@ def seal(channel: str, assets: Path) -> None:
         "source_sha": candidate["source"]["sha"],
         "upstream_manifest_version": candidate["upstream_manifest_version"],
     }
-    tag = tag_for(channel, source)
+    selected = json.loads(Path(os.environ["RUNNER_TEMP"], "selected-source.json").read_text())
+    tag = tag_for(channel, source, selected["port_revision"])
     notes = (
         f"HVE Core Codex {channel}: {tag}\n\n"
         f"Upstream: microsoft/hve-core@{source['source_sha']}\n"
@@ -160,8 +180,12 @@ def publish(channel: str, assets: Path, expected_digest: str, tag: str) -> None:
     if not head.get("protected") or head["commit"]["sha"] != os.environ["GITHUB_SHA"]:
         raise ReleaseError("Protected main advanced before publication.")
     candidate = json.loads((assets / "release-manifest.json").read_text())
+    revision_match = re.search(r"-codex\.([1-9][0-9]*)$", tag)
+    if not revision_match:
+        raise ReleaseError("Invalid immutable release revision.")
     expected_tag = tag_for(channel, {"source_sha": candidate["source"]["sha"],
-                                   "upstream_manifest_version": candidate["upstream_manifest_version"]})
+                                   "upstream_manifest_version": candidate["upstream_manifest_version"]},
+                           int(revision_match.group(1)))
     if tag != expected_tag or candidate["channel"] != channel or candidate["converter"]["sha"] != os.environ["GITHUB_SHA"]:
         raise ReleaseError("Release tag or provenance does not match the validated build.")
     latest = discover_sources(channel, token=os.environ.get("GH_TOKEN"), limit=1)
@@ -194,7 +218,12 @@ def publish(channel: str, assets: Path, expected_digest: str, tag: str) -> None:
         subprocess.run(args, check=True)
     subprocess.run(["gh", "release", "upload", tag, "--repo", repo, "--clobber",
                     *(str(path) for path in sorted(assets.iterdir()))], check=True)
-    draft = gh("api", f"repos/{repo}/releases/tags/{tag}")
+    # The tag lookup endpoint excludes drafts; list drafts then address the ID.
+    refreshed = [item for page in gh("api", f"repos/{repo}/releases", "--paginate", "--slurp") for item in page]
+    matches = [item for item in refreshed if item.get("tag_name") == tag and item.get("draft")]
+    if len(matches) != 1:
+        raise ReleaseError("Could not identify the exact unpublished release.")
+    draft = gh("api", f"repos/{repo}/releases/{matches[0]['id']}")
     expected = {path.name: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() for path in assets.iterdir()}
     actual = {item["name"]: item.get("digest") for item in draft["assets"]}
     if actual != expected or not draft.get("draft") or draft.get("prerelease") is not (channel == "edge"):
@@ -203,8 +232,10 @@ def publish(channel: str, assets: Path, expected_digest: str, tag: str) -> None:
     if not head.get("protected") or head["commit"]["sha"] != os.environ["GITHUB_SHA"]:
         raise ReleaseError("Main advanced during asset upload; draft remains unpublished.")
     # Release visibility changes only after every upload is independently verified.
-    subprocess.run(["gh", "release", "edit", tag, "--repo", repo, "--draft=false",
-                    "--latest=false" if channel == "edge" else "--latest"], check=True)
+    published = gh("api", f"repos/{repo}/releases/{draft['id']}", "--method", "PATCH",
+                   "-F", "draft=false", "-f", f"make_latest={'false' if channel == 'edge' else 'true'}")
+    if published.get("draft") is not False:
+        raise ReleaseError("GitHub did not confirm release publication.")
 
 
 def main() -> None:
