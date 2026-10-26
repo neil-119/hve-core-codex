@@ -15,45 +15,27 @@ Each build fetches upstream into a temporary checkout, pins its commit, verifies
 
 `--archive-only` repackages validated external output after automated release metadata is generated. It archives only managed distribution paths, excluding unrelated files. Archive order, owners, modes and timestamps are normalized for deterministic bytes.
 
-## Weekly source review
+## Automatic weekly publication
 
-`weekly-sync.yml` runs on Mondays at 09:00 UTC. It considers the latest published stable source and the latest upstream `main` commit for edge. Prerelease sync remains manual; it is excluded from automatic publication. Push events only validate changes.
+`weekly-sync.yml` runs Mondays at 09:00 UTC and can also be dispatched for a retry. It selects the newest published Microsoft stable release and newest upstream `main` commit for edge. Channels run independently. Already published sources are skipped; there is no backlog replay, metadata PR, environment approval, or routine owner task.
 
-The sync workflow uses the same Bash builder. It compares the upstream pin and a fingerprint of relevant builder inputs with the reviewed channel record. Documentation edits, bytecode caches, and metadata-only merge commits do not cause another build candidate. Immutable builder and adapter commit pins remain recorded for reproduction.
+Both channels use the migrator on protected `main`, whose exact commit must have a successful push validation run. Upstream input is pinned to a full commit SHA and treated as data: upstream scripts are never executed. Generated content stays outside the repository and is packaged as release assets.
 
-A changed candidate produces an Actions artifact containing its distribution archive and review reports. A draft PR stages only:
+The read-only build job runs unit tests, lint, a locked dependency audit, structural validation, conversion inventory/reference coverage, an install/update/uninstall smoke test, and archive checksum verification. Unknown behavior-bearing fields, unresolved references, invalid output paths and other compatibility blockers fail the job. The publisher downloads the exact artifact ID and checks a digest over every asset name and byte, current protected main, latest upstream source, release channel and immutable tag before publication. Only the publication job can write releases. An existing tag is never moved; an already published source is a no-op. A failed tag-only attempt can be retried against the same port commit.
 
-```text
-release/<channel>/source-lock.json
-release/<channel>/release-manifest.json
-release/<channel>/checksums.txt
-```
+Releases include `dist.zip`, `dist.tar.gz`, an installer wheel, SHA-256 files, the release manifest, compatibility report, generated checksums, and migration eligibility result. Stable is a normal release; edge is a prerelease. The built-in GitHub token is sufficient. No GPG key, paid model access, or review environment is required. Repository visibility is unchanged.
 
-The source lock records the schema, channel, upstream ref/SHA, adapter revision, builder commit, and build-input SHA-256. The manifest binds generated file hashes, mapping and scenario hashes, licensing/provenance, and any reviewed runtime envelope. Generated plugin trees and originals are never bot commits in this repository.
+The automated policy is explicitly **migration-only** (`release eligibility --validation-policy migration`). It does not claim fresh live CLI/Desktop behavior or Vally model acceptance. Missing runtime evidence remains visible but does not block this policy. Historical evaluation failures and deferred host limitations remain documented. Actual conversion or validation failures block publication.
 
-Sync PRs require human review and merge. Automatic merge is disabled while the source-only evidence flow is established. Review the Actions archive, compatibility warnings, immutable pins, and required runtime results; missing evidence is not a pass.
+On failure, a separate job creates or updates an assigned GitHub issue with the Actions run URL. Successful and unchanged runs do not create issues. Notification delivery follows the owner's GitHub account settings.
 
-## Publication gates
+## Optional runtime-evidence publication
 
-The publisher reads metadata from the protected channel branch (`main` for stable, `edge` for edge). It skips missing/unreviewed records, older upstream candidates, and already published sources before obtaining signing credentials.
-
-For an eligible record, `.github/scripts/rebuild_release_distribution.sh` extracts the exact pinned builder commit into temporary storage, verifies its input fingerprint, fetches the exact upstream source, and calls that builder's `scripts/build.sh`. Automated structural validation is recorded before restoring reviewed manifest/checksum metadata. The existing strict release eligibility checks compare rebuilt hashes and runtime evidence.
-
-Stable requires either the legacy full-suite Vally verification or the explicitly selected historical behavioral acceptance policy, plus the reviewed candidate-specific CLI/Desktop acceptance envelope. Edge requires explicit development-snapshot opt-in and cannot masquerade as stable. Unknown mappings, missing references, licensing/security changes, checksum mismatches, missing captures, and unverified required behavior block publication. The user's implementation closeout and paid-eval pause do not clear these gates.
-
-The publisher repeats branch-head, latest-source, hash, and eligibility checks after approval of its protected environment. It creates an unsigned immutable tag pointing to source-only builder/lock metadata and attaches the distribution ZIP/tar archives, their SHA-256 files, the installer wheel and its SHA-256, manifest, and generated checksums to the GitHub release. Existing published tags are never rewritten.
-
-## Evidence and setup still required
-
-Configure protected `main`/`edge` branches and protected `release-stable`/`release-edge` environments with human approval. Publication and sync use the built-in GitHub token; no custom App or GPG secrets are required. Dispatch and publication still require owner authorization.
-
-Reviewed `release/<channel>/runtime-evidence.json` is restored as an envelope. Its referenced raw CLI captures and Vally evidence must also be available under the external distribution's expected paths; the rebuild helper restores captures from a pinned same-repository Actions artifact when an evidence-source record is supplied. Missing files remain blocking. The artifact transport described below supplies file-backed captures; Desktop validation remains manual. Historical model-suite results are preserved separately. Do not check migrated source or large runtime bundles into the builder repo to work around this gap.
-
-For installation, verify and extract a release archive outside this repository, then use `hve-codex install --distribution <external-directory>` with project or global scope. The builder Git repository itself is no longer a plugin marketplace; the generated archive includes the marketplace catalog used by the installer/Desktop.
+`publish.yml` and manual `sync-upstream.yml` retain the stricter candidate-specific evidence process. They are not called by the weekly workflow. Their protected channel metadata and CLI/Desktop evidence requirements apply only when explicitly using that path. The evidence delivery and historical acceptance contracts below describe this optional path, not automatic weekly prerequisites.
 
 ## Release-based end-user installation
 
-The README uses `uv run` with `scripts/install_release.py` from the public repository. The dependency-free launcher chooses the latest published stable release, the latest published edge prerelease, or an exact GitHub release tag. It checks the ZIP and wheel SHA-256, rejects unsafe archive paths/symlinks, installs the wheel into a persistent uv tool environment, then invokes its managed installer on the downloaded distribution. Temporary downloads are cleaned up; Codex trust is never granted automatically. No Git checkout, upstream conversion, or WSL is required for end users. GitHub releases must include `dist.zip`, `dist.zip.sha256`, exactly one `hve_core_codex-...-py3-none-any.whl`, and its `.sha256` asset. Older releases lacking these assets report an error. Publication still requires the existing review/evidence gates.
+The README uses `uv run` with `scripts/install_release.py` from the public repository. The dependency-free launcher chooses the latest published stable release, the latest published edge prerelease, or an exact GitHub release tag. It checks the ZIP and wheel SHA-256, rejects unsafe archive paths/symlinks, installs the wheel into a persistent uv tool environment, then invokes its managed installer on the downloaded distribution. Temporary downloads are cleaned up; Codex trust is never granted automatically. No Git checkout, upstream conversion, or WSL is required for end users. GitHub releases must include `dist.zip`, `dist.zip.sha256`, exactly one `hve_core_codex-...-py3-none-any.whl`, and its `.sha256` asset. Older releases lacking these assets report an error. Automatic weekly publication uses the migration-only gates above.
 
 ## First edge snapshot with the built-in GitHub token
 

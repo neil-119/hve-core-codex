@@ -839,11 +839,12 @@ def _read_json(path: Path | str, *, label: str) -> dict[str, Any]:
     return value
 
 
-def _static_blockers(report: Mapping[str, Any], *, channel: str, runtime_evidence_supplied: bool) -> list[str]:
+def _static_blockers(report: Mapping[str, Any], *, channel: str, runtime_evidence_supplied: bool,
+                     migration_only: bool = False) -> list[str]:
     blockers: list[str] = []
     for item in report.get("release_blockers", []) or []:
         code = item.get("code") if isinstance(item, dict) else None
-        if code == "runtime-evidence-missing" and (channel != "stable" or runtime_evidence_supplied):
+        if code == "runtime-evidence-missing" and (migration_only or channel != "stable" or runtime_evidence_supplied):
             continue
         blockers.append(f"compatibility report: {item}")
     if report.get("unknown_fields"):
@@ -1027,6 +1028,7 @@ def publication_eligibility(
     protected_branch: bool = False,
     vally_verification: Mapping[str, Any] | None = None,
     behavior_acceptance: Mapping[str, Any] | None = None,
+    migration_only: bool = False,
 ) -> dict[str, Any]:
     """Compute an explicit channel policy result without performing publication."""
     channel = _validate_channel(channel)
@@ -1037,6 +1039,7 @@ def publication_eligibility(
         compatibility_report,
         channel=channel,
         runtime_evidence_supplied=runtime_evidence is not None,
+        migration_only=migration_only,
     )
     if compatibility_report.get("upstream_sha") != source_sha:
         blockers.append("compatibility report upstream SHA does not match the candidate source SHA")
@@ -1057,7 +1060,10 @@ def publication_eligibility(
         if not HEX_SHA256_RE.fullmatch(str(digest)):
             blockers.append(f"generated output has an invalid SHA-256 digest: {path}")
     if channel == "stable":
-        if not runtime_evidence:
+        if migration_only:
+            if runtime_evidence is not None or behavior_acceptance is not None:
+                blockers.append("migration-only publication cannot claim runtime acceptance")
+        elif not runtime_evidence:
             blockers.append("stable publication requires runtime evaluation evidence")
         else:
             if not runtime_evidence_sha256 or not HEX_SHA256_RE.fullmatch(runtime_evidence_sha256):
@@ -1092,6 +1098,7 @@ def publication_eligibility(
             "status": "eligible" if eligible else "blocked",
             "blockers": blockers,
             "publication": "stable-release" if eligible else None,
+            "validation_scope": "migration-only" if migration_only else "runtime-acceptance",
         }
     if channel == "prerelease":
         if not upstream_prerelease:
@@ -1355,6 +1362,9 @@ def _cmd_refresh_manifest(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _cmd_eligibility(args: argparse.Namespace) -> dict[str, Any]:
+    migration_only = getattr(args, "validation_policy", "runtime") == "migration"
+    if migration_only and (args.runtime_evidence or getattr(args, "acceptance_policy", None)):
+        raise ReleaseError("Migration validation cannot be combined with runtime acceptance evidence.")
     report = _read_json(args.compatibility_report, label="compatibility report")
     manifest = _read_json(args.release_manifest, label="release manifest")
     evidence = _read_json(args.runtime_evidence, label="runtime evidence") if args.runtime_evidence else None
@@ -1430,6 +1440,7 @@ def _cmd_eligibility(args: argparse.Namespace) -> dict[str, Any]:
         protected_branch=args.protected_branch,
         vally_verification=vally_verification,
         behavior_acceptance=behavior_acceptance,
+        migration_only=migration_only,
     )
     if behavior_acceptance is not None:
         decision["behavior_acceptance"] = behavior_acceptance
@@ -1905,6 +1916,8 @@ def add_release_parser(subparsers: Any) -> argparse.ArgumentParser:
     eligibility.add_argument("--compatibility-report", type=Path, required=True)
     eligibility.add_argument("--release-manifest", type=Path, required=True)
     eligibility.add_argument("--runtime-evidence", type=Path)
+    eligibility.add_argument("--validation-policy", choices=("runtime", "migration"), default="runtime",
+                             help="Migration publishes after deterministic checks without claiming live host acceptance")
     eligibility.add_argument("--acceptance-policy", type=Path, help="Explicit reviewed historical behavioral acceptance; candidate host evidence remains required")
     eligibility.add_argument("--upstream-prerelease", action="store_true")
     eligibility.add_argument("--opt-in", action="store_true")

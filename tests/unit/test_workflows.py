@@ -54,11 +54,8 @@ def test_channel_preflight_skips_only_scheduled_setup_gaps(tmp_path, event, stat
 
 def test_unconfigured_channels_cannot_reach_build_or_publication():
     sync = _load_workflow("sync-upstream.yml")
-    weekly = _load_workflow("weekly-sync.yml")
     assert sync["jobs"]["build"]["needs"] == "preflight"
     assert sync["jobs"]["build"]["if"] == "needs.preflight.outputs.ready == 'true'"
-    for channel in ("stable", "edge"):
-        assert weekly["jobs"][f"publish-{channel}"]["if"] == f"needs.sync-{channel}.outputs.ready == 'true'"
 
 
 def test_weekly_schedule_checks_stable_and_edge_only():
@@ -67,19 +64,12 @@ def test_weekly_schedule_checks_stable_and_edge_only():
     publish = _load_workflow("publish.yml")
 
     assert weekly["on"]["schedule"] == [{"cron": "0 9 * * 1"}]
-    assert {job["with"]["channel"] for job in weekly["jobs"].values()} == {"stable", "edge"}
-    assert {job["uses"] for job in weekly["jobs"].values()} == {
-        "./.github/workflows/sync-upstream.yml", "./.github/workflows/publish.yml",
-    }
-    assert weekly["jobs"]["publish-stable"]["needs"] == "sync-stable"
-    assert weekly["jobs"]["publish-edge"]["needs"] == "sync-edge"
+    job = weekly["jobs"]["release"]
+    assert job["strategy"]["matrix"]["channel"] == ["stable", "edge"]
+    assert job["strategy"]["fail-fast"] is False
+    assert job["uses"] == "./.github/workflows/automatic-release.yml"
+    assert job["permissions"] == {"actions": "read", "contents": "write", "issues": "write"}
     assert weekly["permissions"] == {"actions": "read", "contents": "read"}
-    for name in ("sync-stable", "sync-edge"):
-        assert weekly["jobs"][name]["permissions"] == {
-            "actions": "read", "contents": "write", "pull-requests": "write",
-        }
-    for name in ("publish-stable", "publish-edge"):
-        assert weekly["jobs"][name]["permissions"] == {"actions": "read", "contents": "write"}
     assert "schedule" not in sync["on"]
     assert "workflow_call" in sync["on"]
     assert sync["on"]["workflow_dispatch"]["inputs"]["channel"]["options"] == ["stable", "prerelease", "edge"]

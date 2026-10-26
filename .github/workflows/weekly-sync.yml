@@ -1,59 +1,24 @@
-name: Weekly HVE Core stable and edge sync and publication
-
+name: Weekly HVE Core stable and edge publication
 on:
   schedule:
   - cron: "0 9 * * 1"
-
+  workflow_dispatch: {}
 permissions:
   actions: read
   contents: read
 concurrency:
   group: hve-core-weekly-sync
   cancel-in-progress: false
-
 jobs:
-  sync-stable:
-    name: Check the latest stable release
-    uses: ./.github/workflows/sync-upstream.yml
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, edge]
+    uses: ./.github/workflows/automatic-release.yml
     with:
-      channel: stable
+      channel: ${{ matrix.channel }}
     permissions:
       actions: read
       contents: write
-      pull-requests: write
-    secrets: inherit
-
-  sync-edge:
-    name: Check upstream main for an edge change
-    uses: ./.github/workflows/sync-upstream.yml
-    with:
-      channel: edge
-    permissions:
-      actions: read
-      contents: write
-      pull-requests: write
-    secrets: inherit
-  publish-stable:
-    name: Publish the latest reviewed stable only if changed
-    needs: sync-stable
-    if: needs.sync-stable.outputs.ready == 'true'
-    uses: ./.github/workflows/publish.yml
-    with:
-      channel: stable
-      confirm_edge_snapshot: false
-    permissions:
-      actions: read
-      contents: write
-    secrets: inherit
-  publish-edge:
-    name: Publish the latest reviewed edge only if changed
-    needs: sync-edge
-    if: needs.sync-edge.outputs.ready == 'true'
-    uses: ./.github/workflows/publish.yml
-    with:
-      channel: edge
-      confirm_edge_snapshot: true
-    permissions:
-      actions: read
-      contents: write
-    secrets: inherit
+      issues: write

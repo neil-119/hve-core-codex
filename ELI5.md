@@ -24,7 +24,7 @@ Codex supplies the model, tools, subagents, and sandbox. HVE supplies the instru
 
 Copilot and Codex use different agent profiles, tool names, discovery rules, and hook interfaces. We translate those connections and provide a managed installation overlay alongside a portable plugin.
 
-Stable follows Microsoft's latest published release. Edge follows a pinned commit on `main`. The weekly GitHub workflow checks the latest stable and latest edge, and only proposes or publishes changed versions when the configured review and release gates permit it. GitHub publication still needs repository setup and authorization.
+Stable follows Microsoft's latest published release. Edge follows a pinned commit on `main`. The weekly GitHub workflow checks both and automatically publishes changed versions after migration checks pass. It asks for attention only if a check fails. This does not run paid models or claim fresh Desktop acceptance.
 
 We keep Microsoft's **Vally** test engine, original tests, graders, and scoring. Our backend runs tasks and judges through the official Codex CLI and normalizes its saved events into Vally's format. `--codex-binary` chooses which installed Codex executable to use; it does not select a custom Codex fork. Custom Codex checks cover things such as installation, skill loading, hooks, and native role loading.
 
