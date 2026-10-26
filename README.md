@@ -10,7 +10,7 @@ Bring HVE Core's guided workflows to both Codex CLI and desktop.
 | --- | --- |
 | <img src="img/codex_cli.png" alt="Codex CLI suggesting HVE Core RPI workflows" width="480"> | <img src="img/codex_desktop.png" alt="Codex desktop suggesting HVE Core RPI workflows" width="480"> |
 
-**How it works**: The GH Actions workflow periodically fetches HVE Core and migrates the distribution into a packaged release. Stable follows Microsoft’s published releases. Edge follows the newest work on `main`. The GitHub workflow checks both weekly for updates.
+**How it works**: The GH Actions workflow periodically fetches HVE Core and migrates the distribution into a packaged release. Stable follows Microsoft’s published releases. Edge follows the newest work on `main`. The GitHub workflow checks both weekly and publishes changed sources automatically after migration checks pass. Only failures need attention; no paid model tests run during publication.
 
 The current HVE Core upstream golden eval set pass rate is about ~59%. Microsoft's eval set uses certain regular expressions and mannerism detections that are fine-tuned for Claude Haiku. There may also be semantic errors, but the core workflows are functional.
 

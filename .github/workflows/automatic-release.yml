@@ -1,0 +1,151 @@
+name: Automatically publish a validated migration
+on:
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: hve-codex-publish-${{ inputs.channel }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      changed: ${{ steps.select.outputs.changed }}
+      tag: ${{ steps.seal.outputs.tag }}
+      digest: ${{ steps.seal.outputs.digest }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.11'
+    - name: Install locked tools
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.8.22
+        uv sync --locked --all-groups
+    - name: Require green exact-commit main validation
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?head_sha=$GITHUB_SHA&per_page=100" > "$RUNNER_TEMP/validation.json"
+        python .github/scripts/publish_edge_snapshot.py check-validation --validation-runs-json "$RUNNER_TEMP/validation.json" --port-commit "$GITHUB_SHA"
+    - name: Select latest unpublished upstream source
+      id: select
+      env:
+        GH_TOKEN: ${{ github.token }}
+        CHANNEL: ${{ inputs.channel }}
+      run: uv run python .github/scripts/automatic_release.py select --channel "$CHANNEL"
+    - name: Test and audit the migrator without model calls
+      if: steps.select.outputs.changed == 'true'
+      run: |
+        uv run ruff check src tests .github/scripts/automatic_release.py
+        uv run pytest -q
+        uv export --locked --all-groups --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/audit.txt"
+        uv run pip-audit --strict --no-deps --disable-pip -r "$RUNNER_TEMP/audit.txt"
+    - name: Build pinned upstream data and validate migration
+      if: steps.select.outputs.changed == 'true'
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        SOURCE_REF: ${{ steps.select.outputs.source_ref }}
+        SOURCE_SHA: ${{ steps.select.outputs.source_sha }}
+      run: |
+        bash scripts/build.sh --output "$RUNNER_TEMP/dist" --channel "$CHANNEL" --ref "$SOURCE_REF" --sha "$SOURCE_SHA" --adapter-revision "$GITHUB_SHA"
+        uv run hve-codex validate --output "$RUNNER_TEMP/dist" --record
+        uv run python .github/scripts/automatic_release.py manifest --channel "$CHANNEL" --directory "$RUNNER_TEMP/dist"
+        uv run hve-codex release eligibility --channel "$CHANNEL" --validation-policy migration --root "$RUNNER_TEMP/dist" --compatibility-report "$RUNNER_TEMP/dist/generated/compatibility-report.json" --release-manifest "$RUNNER_TEMP/dist/generated/release-manifest.json" --merged-commit "$GITHUB_SHA" --protected-branch --opt-in > "$RUNNER_TEMP/eligibility.json"
+    - name: Smoke install, update and uninstall the migrated files
+      if: steps.select.outputs.changed == 'true'
+      run: |
+        mkdir -p "$RUNNER_TEMP/install-smoke"
+        uv run hve-codex install --distribution "$RUNNER_TEMP/dist" --target "$RUNNER_TEMP/install-smoke" --no-plugin
+        uv run hve-codex update --distribution "$RUNNER_TEMP/dist" --target "$RUNNER_TEMP/install-smoke" --no-plugin
+        uv run hve-codex uninstall --target "$RUNNER_TEMP/install-smoke"
+    - name: Package validated distribution and installer
+      if: steps.select.outputs.changed == 'true'
+      run: |
+        bash scripts/build.sh --archive-only --output "$RUNNER_TEMP/dist"
+        mkdir -p "$RUNNER_TEMP/assets"
+        uv build --wheel --out-dir "$RUNNER_TEMP/assets"
+        for wheel in "$RUNNER_TEMP/assets/"*.whl; do
+          (cd "$RUNNER_TEMP/assets" && sha256sum "$(basename "$wheel")" > "$(basename "$wheel").sha256")
+        done
+        cp "$RUNNER_TEMP/dist.zip" "$RUNNER_TEMP/dist.zip.sha256" "$RUNNER_TEMP/dist.tar.gz" "$RUNNER_TEMP/dist.tar.gz.sha256" "$RUNNER_TEMP/assets/"
+        cp "$RUNNER_TEMP/dist/generated/release-manifest.json" "$RUNNER_TEMP/dist/generated/compatibility-report.json" "$RUNNER_TEMP/dist/generated/checksums.txt" "$RUNNER_TEMP/eligibility.json" "$RUNNER_TEMP/assets/"
+        (cd "$RUNNER_TEMP/assets" && sha256sum -c ./*.sha256)
+    - name: Seal exact release assets
+      if: steps.select.outputs.changed == 'true'
+      id: seal
+      env:
+        CHANNEL: ${{ inputs.channel }}
+      run: uv run python .github/scripts/automatic_release.py seal --channel "$CHANNEL" --directory "$RUNNER_TEMP/assets"
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      if: steps.select.outputs.changed == 'true'
+      id: upload
+      with:
+        name: automatic-${{ inputs.channel }}
+        path: ${{ runner.temp }}/assets/*
+        if-no-files-found: error
+        retention-days: 14
+  publish:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.11'
+    - name: Install locked tools
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.8.22
+        uv sync --locked --all-groups
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        artifact-ids: ${{ needs.build.outputs.artifact_id }}
+        path: ${{ runner.temp }}/assets
+        merge-multiple: true
+    - name: Verify sealed assets and publish immutable release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        CHANNEL: ${{ inputs.channel }}
+        ASSET_DIGEST: ${{ needs.build.outputs.digest }}
+        RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      run: uv run python .github/scripts/automatic_release.py publish --channel "$CHANNEL" --directory "$RUNNER_TEMP/assets" --digest "$ASSET_DIGEST" --tag "$RELEASE_TAG"
+  report-failure:
+    needs: [build, publish]
+    if: always() && (needs.build.result == 'failure' || needs.publish.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+    - name: Notify only when automatic release fails
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        title="Automatic $CHANNEL publication failed"
+        body="Automatic publication stopped. Inspect https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. No failed checks were bypassed."
+        issue="$(gh issue list --repo "$GH_REPO" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+        if [ -n "$issue" ]; then
+          gh issue comment "$issue" --repo "$GH_REPO" --body "$body"
+        else
+          gh issue create --repo "$GH_REPO" --title "$title" --body "$body" --assignee "$GITHUB_REPOSITORY_OWNER"
+        fi
