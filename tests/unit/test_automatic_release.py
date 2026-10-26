@@ -54,6 +54,9 @@ def test_assets_digest_detects_mutation_addition_and_symlinks(tmp_path):
     assert helper.asset_digest(tmp_path) != digest
     with pytest.raises(ReleaseError, match="do not match"):
         helper.publish("stable", tmp_path, digest, "tag")
+    (tmp_path / ".gitignore").write_bytes(b"*")
+    with pytest.raises(ReleaseError, match="safely named"):
+        helper.asset_digest(tmp_path)
 
 
 @pytest.mark.parametrize("channel", ["stable", "edge"])
@@ -109,6 +112,8 @@ def test_automatic_workflow_separates_build_and_publisher_and_reports_failures()
     assert "--validation-policy migration" in text
     assert "eval vally-run" not in text
     assert "--runtime-evidence" not in text
+    assert 'uv build --wheel --out-dir "$RUNNER_TEMP/installer"' in text
+    assert 'cp "$RUNNER_TEMP/installer/"*.whl "$RUNNER_TEMP/assets/"' in text
 
 
 @pytest.mark.parametrize("channel", ["stable", "edge"])
