@@ -75,7 +75,7 @@ def test_selection_skips_published_sources_and_rejects_stale_main(monkeypatch, t
     assets = [{"name": name} for name in ("dist.zip", "dist.zip.sha256", "dist.tar.gz", "dist.tar.gz.sha256",
               "hve_core_codex-0.1.0-py3-none-any.whl", "hve_core_codex-0.1.0-py3-none-any.whl.sha256")]
     assets.append({"name": "release-manifest.json", "id": 123})
-    monkeypatch.setattr(helper, "gh", lambda *a: {"source": {"sha": "a" * 40}} if "/assets/123" in a[1] else branch if a[1].endswith("branches/main") else
+    monkeypatch.setattr(helper, "gh", lambda *a: [] if "/matching-refs/" in a[1] else {"source": {"sha": "a" * 40}} if "/assets/123" in a[1] else branch if a[1].endswith("branches/main") else
                         [[{"tag_name": tag, "prerelease": channel == "edge", "draft": False, "assets": assets}]] if published else [[]])
     helper.select(channel)
     assert f"changed={'false' if published else 'true'}" in (tmp_path / "outputs").read_text()
@@ -88,6 +88,8 @@ def test_seal_records_migration_scope_without_claiming_runtime(monkeypatch, tmp_
     helper = load_helper()
     monkeypatch.setenv("GITHUB_SHA", "c" * 40)
     monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path.parent / "outputs"))
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path.parent))
+    (tmp_path.parent / "selected-source.json").write_text(json.dumps({"port_revision": 1}))
     (tmp_path / "release-manifest.json").write_text(json.dumps({
         "source": {"sha": "a" * 40}, "upstream_manifest_version": "3.2.2",
     }))
@@ -118,7 +120,8 @@ def test_automatic_workflow_separates_build_and_publisher_and_reports_failures()
 
 @pytest.mark.parametrize("channel", ["stable", "edge"])
 @pytest.mark.parametrize("failure", [None, "upload", "checksum", "tag-conflict", "stale-source"])
-def test_publication_is_draft_until_verified_and_never_rewrites_tag(monkeypatch, tmp_path, channel, failure):
+@pytest.mark.parametrize("existing_draft", [False, True])
+def test_publication_is_draft_until_verified_and_never_rewrites_tag(monkeypatch, tmp_path, channel, failure, existing_draft):
     helper = load_helper()
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
     monkeypatch.setenv("GITHUB_SHA", "c" * 40)
@@ -129,24 +132,30 @@ def test_publication_is_draft_until_verified_and_never_rewrites_tag(monkeypatch,
     (tmp_path / "release-notes.md").write_text("migration only")
     tag = helper.tag_for(channel, {"source_sha": "a" * 40, "upstream_manifest_version": "3.2.2"})
     calls = []
+    uploaded = False
     def api(*args):
         calls.append(args)
         endpoint = args[1]
         if endpoint.endswith("branches/main"):
             return {"protected": True, "commit": {"sha": "c" * 40}}
         if endpoint.endswith("/releases"):
-            return [[]]
+            return [[{"id": 99, "tag_name": tag, "draft": True, "target_commitish": "c" * 40}]] if uploaded or existing_draft else [[]]
         if "/matching-refs/" in endpoint:
             return [{"ref": f"refs/tags/{tag}", "object": {"type": "commit", "sha": "d" * 40}}] if failure == "tag-conflict" else []
-        if "/releases/tags/" in endpoint:
-            return {"draft": True, "prerelease": channel == "edge", "assets": [
+        if endpoint.endswith("/releases/99"):
+            if "PATCH" in args:
+                return {"draft": False}
+            return {"id": 99, "draft": True, "prerelease": channel == "edge", "assets": [
                 {"name": p.name, "digest": "bad" if failure == "checksum" else "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()}
                 for p in tmp_path.iterdir()]}
         return {}
     def run(args, **kwargs):
+        nonlocal uploaded
         calls.append(tuple(args))
         if args[:3] == ["gh", "release", "upload"] and failure == "upload":
             raise subprocess.CalledProcessError(1, args)
+        if args[:3] == ["gh", "release", "upload"]:
+            uploaded = True
     monkeypatch.setattr(helper, "gh", api)
     monkeypatch.setattr(helper.subprocess, "run", run)
     monkeypatch.setattr(helper, "discover_sources", lambda *a, **kw: [{
@@ -154,14 +163,18 @@ def test_publication_is_draft_until_verified_and_never_rewrites_tag(monkeypatch,
     if failure:
         with pytest.raises((ReleaseError, subprocess.CalledProcessError)):
             helper.publish(channel, tmp_path, helper.asset_digest(tmp_path), tag)
-        assert not any(call[:3] == ("gh", "release", "edit") for call in calls)
+        assert not any("PATCH" in call for call in calls)
     else:
         helper.publish(channel, tmp_path, helper.asset_digest(tmp_path), tag)
-        create = next(call for call in calls if call[:3] == ("gh", "release", "create"))
-        edit = next(call for call in calls if call[:3] == ("gh", "release", "edit"))
-        assert "--draft" in create
-        assert calls.index(create) < calls.index(edit)
-        assert "--draft=false" in edit
+        patch = next(call for call in calls if "PATCH" in call)
+        upload = next(call for call in calls if call[:3] == ("gh", "release", "upload"))
+        assert calls.index(upload) < calls.index(patch)
+        if not existing_draft:
+            create = next(call for call in calls if call[:3] == ("gh", "release", "create"))
+            assert "--draft" in create
+        else:
+            assert not any(call[:3] == ("gh", "release", "create") for call in calls)
+        assert "draft=false" in patch
 
 
 def test_manifest_timestamp_is_pinned_to_builder_commit(monkeypatch, tmp_path):
@@ -183,3 +196,12 @@ def test_manifest_timestamp_is_pinned_to_builder_commit(monkeypatch, tmp_path):
     helper.manifest("stable", tmp_path)
     assert calls[0] == calls[1]
     assert calls[0]["generated_at"] == "2026-10-26T12:00:00Z"
+
+
+def test_retry_allocates_revision_without_rewriting_old_tags():
+    helper = load_helper()
+    source = {"source_sha": "a" * 40, "upstream_manifest_version": "3.2.2"}
+    refs = [{"ref": "refs/tags/hve-core-v3.2.2-codex.1", "object": {"type": "commit", "sha": "c" * 40}}]
+    assert helper.choose_revision("stable", source, refs, "c" * 40) == 1
+    assert helper.choose_revision("stable", source, refs, "d" * 40) == 2
+    assert refs[0]["object"]["sha"] == "c" * 40
