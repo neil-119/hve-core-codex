@@ -75,7 +75,8 @@ jobs:
       run: |
         bash scripts/build.sh --archive-only --output "$RUNNER_TEMP/dist"
         mkdir -p "$RUNNER_TEMP/assets"
-        uv build --wheel --out-dir "$RUNNER_TEMP/assets"
+        uv build --wheel --out-dir "$RUNNER_TEMP/installer"
+        cp "$RUNNER_TEMP/installer/"*.whl "$RUNNER_TEMP/assets/"
         for wheel in "$RUNNER_TEMP/assets/"*.whl; do
           (cd "$RUNNER_TEMP/assets" && sha256sum "$(basename "$wheel")" > "$(basename "$wheel").sha256")
         done

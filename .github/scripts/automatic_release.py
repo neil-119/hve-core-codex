@@ -120,7 +120,7 @@ def asset_digest(directory: Path) -> str:
     """Bind every asset name and byte to the read-only build job's output."""
     inventory = {}
     for path in sorted(directory.iterdir()):
-        if path.is_symlink() or not path.is_file() or not re.fullmatch(r"[A-Za-z0-9_.+-]+", path.name):
+        if path.is_symlink() or not path.is_file() or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", path.name):
             raise ReleaseError("Release assets must be safely named regular files.")
         inventory[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
     if not inventory:
