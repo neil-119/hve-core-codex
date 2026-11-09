@@ -8,6 +8,7 @@ overrides:
       - a6ebd05e19fe392db712ffd10aebdf6faaad282fea1c372b2a68909701569650
     body_file: overrides/installer.md
     metadata_overrides:
+      description: Decision-driven HVE Core installer for Codex with managed project or user scope, existing-install detection, validation, safe updates and uninstall guidance.
       compatibility: Requires Python 3.11+, hve-codex, and a supported Codex client. Plugin discovery and hooks depend on client support and explicit trust.
     rationale: Replace Copilot VSIX installation with managed Codex installation,
       preserving consent and seven phases
