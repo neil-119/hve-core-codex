@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from ruamel.yaml import YAML
 from .common import PortError, digest, dump_json, frontmatter, safe_path, slug, text_write
-from .inventory import scan
+from .inventory import scan, resolve_agent_skills
 from .references import operative_lines, rewrite_links, _mapped_directory
 from .capabilities import load_adapters, tools_in_artifact, classify, guidance, rewrite_tool_tokens
 from .agent_converter import render_agent, delegation_guidance, source_tool_policy
@@ -249,6 +249,15 @@ def _convert(upstream: Path, output: Path, provenance: dict, mappings: Path) -> 
             limitations.append(f"Source host model preference {meta['model']!r} is retained in provenance; this portable role uses the user's configured Codex model. Review model availability before delegation.")
         if meta.get("excludeAgent"):
             findings.append({"source": a["source"], "code": "unsupported-source-exclusion", "message": "Source agent exclusions require a reviewed host enforcement adapter; they cannot be silently dropped."})
+        preloads = resolve_agent_skills(a, artifacts) if a["kind"] == "agent" else []
+        preload_guidance = ""
+        if preloads:
+            preload_guidance = "\n## Required skill preloads\n\nBefore the first workflow step, read each of these packaged skills in full, in the declared order. Apply their instructions throughout the workflow. If any is unavailable, stop the affected workflow and report it. These reads adapt source preloading; native automatic preloading is not claimed.\n"
+            for item in preloads:
+                target = mapping[item["source"]].removeprefix(PLUGIN + "/")
+                preload_guidance += f"- `{names[item['id']]}`: `@@HVE_PLUGIN_ROOT@@/{target}`\n"
+            extra += preload_guidance
+            limitations.append("Source skill preloads are explicit prerequisite reads; native automatic preloading is not verified.")
         # The mirror is the common dependency target and stays inside the portable package.
         mirror = source_notice + converted + extra
         if a["kind"] == "skill":

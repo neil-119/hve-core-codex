@@ -14,7 +14,7 @@ from .references import references
 
 KNOWN_FIELDS = {
     "skill": {"name", "description", "license", "compatibility", "metadata", "allowed-tools", "user-invocable", "disable-model-invocation", "argument-hint"},
-    "agent": {"name", "description", "agents", "tools", "handoffs", "argument-hint", "user-invocable", "disable-model-invocation", "model", "target", "mcp-servers", "reasoning-effort"},
+    "agent": {"name", "description", "agents", "skills", "tools", "handoffs", "argument-hint", "user-invocable", "disable-model-invocation", "model", "target", "mcp-servers", "reasoning-effort"},
     "instruction": {"applyTo", "description", "name", "excludeAgent", "metadata"},
     "prompt": {"name", "description", "agent", "mode", "model", "tools", "argument-hint", "metadata"},
 }
@@ -132,6 +132,11 @@ def _validate_frontmatter_types(meta: dict, source: str) -> None:
     for field in ("user-invocable", "disable-model-invocation"):
         if field in meta and not isinstance(meta[field], bool):
             invalid(field, "a boolean")
+    if "skills" in meta and (
+        not isinstance(meta["skills"], list)
+        or any(not isinstance(item, str) or not item.strip() for item in meta["skills"])
+    ):
+        invalid("skills", "a list of non-empty skill names")
     for field in ("tools", "allowed-tools", "agents", "applyTo"):
         value = meta.get(field)
         if field not in meta:
@@ -145,6 +150,18 @@ def _validate_frontmatter_types(meta: dict, source: str) -> None:
         or any(not isinstance(item, dict) for item in meta["handoffs"])
     ):
         invalid("handoffs", "a list of mappings")
+
+
+def resolve_agent_skills(artifact: dict, artifacts: list[dict]) -> list[dict]:
+    """Resolve declared preloads by exact upstream skill name, without guessing."""
+    resolved = []
+    for name in artifact["frontmatter"].get("skills", []):
+        matches = [item for item in artifacts if item["kind"] == "skill" and item["name"] == name]
+        if len(matches) != 1:
+            raise PortError(f"Agent skill preload {name!r} in {artifact['source']} must resolve to exactly one skill; found {len(matches)}")
+        if matches[0] not in resolved:
+            resolved.append(matches[0])
+    return resolved
 
 
 def _git_link_metadata(root: Path) -> tuple[dict[str, bytes], dict[str, str]]:
@@ -369,6 +386,10 @@ def scan(root: Path, provenance: dict | None = None) -> dict:
             "symlink_target": target,
             "resolved_symlink_target": resolved,
         })
+    for artifact in artifacts:
+        if artifact["kind"] == "agent":
+            preloads = resolve_agent_skills(artifact, artifacts)
+            artifact["dependencies"] = sorted(set(artifact["dependencies"]) | {item["source"] for item in preloads})
     manifests = []
     listed = set()
     missing = []

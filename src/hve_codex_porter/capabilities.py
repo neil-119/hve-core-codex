@@ -8,6 +8,8 @@ from .references import operative_lines
 
 
 TOOL_REFERENCE_REPLACEMENTS = {
+    "ask_user": "the host question interface",
+    "skill": "the packaged skill loading procedure",
     "agent/runSubagent": "native named-agent delegation",
     "runSubagent": "native named-agent delegation",
     "vscode/askQuestions": "the host question interface",

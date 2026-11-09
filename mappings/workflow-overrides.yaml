@@ -5,14 +5,21 @@ overrides:
     reviewed_source_sha256:
       - 2ef2d02e8f340f09e74cd78b368d708f1ef784b332b7fc59d29c5ae6e961020a
       - 5d454295a466a5d334344d9728f7366bba8254b062d4db918f9a812aa2eb8a6b
+      - a6ebd05e19fe392db712ffd10aebdf6faaad282fea1c372b2a68909701569650
     body_file: overrides/installer.md
     metadata_overrides:
+      description: Decision-driven HVE Core installer for Codex with managed project or user scope, existing-install detection, validation, safe updates and uninstall guidance.
       compatibility: Requires Python 3.11+, hve-codex, and a supported Codex client. Plugin discovery and hooks depend on client support and explicit trust.
     rationale: Replace Copilot VSIX installation with managed Codex installation,
       preserving consent and seven phases
-    review_note: Stable and pinned main retain the same consent, method selection,
+    review_note: Stable and earlier pinned main retain the same consent, method selection,
       validation, connector setup, rerun, and optional component/customization phases.
       The main revision adds Bash jq checks and updates the advertised agents;
       these Copilot installation mechanics are replaced by the Codex CLI prerequisites.
       Unknown future source hashes still block conversion. Partial component installation
       is not supplied by the full-mode managed installer.
+      The reviewed plugin-first source adds existing-install detection, one-route
+      guidance, and per-file cleanup approval. The Codex override preserves those
+      safeguards through doctor, update/uninstall previews and explicit cleanup
+      consent. Copilot team-default settings and native-copy routes are replaced
+      by managed project/user scope; never write Copilot settings from this workflow.
