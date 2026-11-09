@@ -79,6 +79,45 @@ def test_python_resource_guidance_preserves_scripts_and_does_not_apply_to_plain_
     assert all((output / original).read_bytes() == script for original in source_map[source]["originals"])
 
 
+def test_agent_skill_preloads_reach_role_and_interactive_procedure(upstream, tmp_path):
+    source = upstream / ".github/agents/guide.agent.md"
+    source.write_text(source.read_text().replace("name: Guide\n", "name: Guide\nskills: [research]\ntools: [read, skill, ask_user]\n"), encoding="utf-8")
+    output = tmp_path / "distribution"
+    report = convert(upstream, output, {"upstream_sha": "a" * 40, "upstream_ref": "main", "channel": "edge"}, ROOT / "mappings")
+    role = tomlkit.parse((output / "codex-overlay/agents/guide.toml").read_text(encoding="utf-8"))
+    mirror = (output / "plugins/hve-core-codex/resources/.github/agents/guide.agent.md").read_text(encoding="utf-8")
+    for body in (role["developer_instructions"], mirror):
+        assert "Required skill preloads" in body
+        assert "@@HVE_PLUGIN_ROOT@@/skills/research/SKILL.md" in body
+        assert "Before the first workflow step" in body
+    entry = (output / "plugins/hve-core-codex/skills/guide/SKILL.md").read_text(encoding="utf-8")
+    assert "Required skill preloads" in entry
+    assert not any(item.get("field") == "skills" or item.get("code") == "unsupported-tool" for item in report["unknown_fields"])
+    inventory = scan(upstream, {"upstream_sha": "a" * 40})
+    guide = next(item for item in inventory["artifacts"] if item["name"] == "Guide")
+    assert ".github/skills/rpi/research/SKILL.md" in guide["dependencies"]
+    assert validate(output, ROOT / "schemas/plugin.schema.json")["valid"]
+
+
+@pytest.mark.parametrize("skills", ["research", "null", "42", "[null]", "['']"])
+def test_invalid_skill_preloads_are_rejected(upstream, tmp_path, skills):
+    source = upstream / ".github/agents/guide.agent.md"
+    source.write_text(source.read_text().replace("name: Guide\n", f"name: Guide\nskills: {skills}\n"), encoding="utf-8")
+    with pytest.raises(PortError, match="skills must be a list of non-empty skill names"):
+        convert(upstream, tmp_path / "distribution", {"upstream_sha": "a" * 40}, ROOT / "mappings")
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_missing_or_ambiguous_skill_preload_stops_conversion(upstream, tmp_path, ambiguous):
+    source = upstream / ".github/agents/guide.agent.md"
+    name = "research" if ambiguous else "missing"
+    source.write_text(source.read_text().replace("name: Guide\n", f"name: Guide\nskills: [{name}]\n"), encoding="utf-8")
+    if ambiguous:
+        write(upstream, ".github/skills/duplicate/SKILL.md", "---\nname: research\ndescription: Duplicate\n---\nDo not guess.\n")
+    with pytest.raises(PortError, match="must resolve to exactly one skill"):
+        convert(upstream, tmp_path / "distribution", {"upstream_sha": "a" * 40}, ROOT / "mappings")
+
+
 @pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max", "ultra"])
 def test_agent_reasoning_effort_is_preserved_in_native_profile(upstream, tmp_path, effort):
     source = upstream / ".github/agents/guide.agent.md"

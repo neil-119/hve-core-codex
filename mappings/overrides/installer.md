@@ -6,6 +6,8 @@ This is the Codex equivalent of the upstream HVE installer. Preserve the Install
 
 Confirm the user's intent to install and the selected destination. If the conversation already explicitly authorizes installation into a named target, retain that authorization; otherwise present the concrete action and wait for consent. Inspect OS, Python 3.11+, `hve-codex --version`, and `codex --version`. Report missing prerequisites and installation instructions; do not install dependencies silently.
 
+Inspect existing HVE registrations and managed state with `hve-codex doctor` for the selected scope and target. Keep one managed installation route per scope. When an installation already exists, offer an update or an explicitly selected replacement before installing another copy. Never stack registrations to repair missing discovery. Copilot team-default settings and native component copies are host-specific; use Codex managed project/user scope instead.
+
 ## Phase 2: Installation Path Selection
 
 Offer the portable plugin plus managed overlay as the full Codex installation, or standalone skills plus the same overlay when plugins are unsupported. Explain that plugin-only installation omits custom agents and scoped rules. The upstream VSIX quick-install path is host-specific and is replaced by Codex marketplace installation; do not install a Copilot extension as a substitute.
@@ -25,6 +27,8 @@ Switch to the Validator persona. Run `hve-codex doctor` with the selected scope 
 ## Phase 6: Post-Installation Setup
 
 Present `$hve-catalog`, `hve-codex rules match <paths...>`, update and uninstall commands. Explain hooks as advisory and offer the explicit-rule fallback. Present connector names, authentication prerequisites and the original read/write scopes. Installing this plugin does not provision cloud services. Offer gitignore adjustments only when needed and authorized; preserve tracking artifacts and user policy.
+
+For earlier registrations or location settings, show each proposed removal and obtain explicit consent for that file before cleanup. Leave unrelated entries intact. Confirm that the selected Codex route discovers representative skills and agents before removing an older route, then repeat discovery after cleanup in a new client session. If discovery is unverified or consent is declined, retain the old entries and report them. Use managed update/uninstall previews for owned files; never delete a clone, settings file or tracking directory as an automatic recovery step.
 
 ## Phase 7: Agent Customization
 

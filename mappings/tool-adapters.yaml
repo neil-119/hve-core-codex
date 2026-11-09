@@ -1,5 +1,7 @@
 version: 1
 adapters:
+  - {pattern: 'ask_user', classification: ask-user, capability: user-decisions, availability: emulated, instruction: 'Use the host question interface when available, otherwise ask in chat and wait for the decision. Preserve consent and approval gates.'}
+  - {pattern: 'skill', classification: native, capability: skill-loading, availability: emulated, instruction: 'Resolve the named skill through the HVE catalog and read its packaged SKILL.md in full before applying it. Stop the affected operation if the skill is missing; do not invent a native skill tool.'}
   - {pattern: 'read*', classification: native, capability: filesystem-read, availability: available, instruction: 'Use Codex filesystem reads. For diagnostics run the repository diagnostic command; for editor selection ask the user for the selected text.'}
   - {pattern: 'search*', classification: shell, capability: filesystem-search, availability: emulated, instruction: 'Use rg for text and file search; use git diff for changes. Semantic search requires evidence-based exploration rather than invented matches.'}
   - {pattern: 'edit*', classification: native, capability: filesystem-write, availability: available, instruction: 'Use apply_patch or authorized filesystem edits within the sandbox.'}
