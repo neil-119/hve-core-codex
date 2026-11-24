@@ -6,6 +6,7 @@ overrides:
       - 2ef2d02e8f340f09e74cd78b368d708f1ef784b332b7fc59d29c5ae6e961020a
       - 5d454295a466a5d334344d9728f7366bba8254b062d4db918f9a812aa2eb8a6b
       - a6ebd05e19fe392db712ffd10aebdf6faaad282fea1c372b2a68909701569650
+      - 6e9904edeebd88e5fbd1c81f3bd07f2aae75e21c01747b5a5c78069ba14bc98a
     body_file: overrides/installer.md
     metadata_overrides:
       description: Decision-driven HVE Core installer for Codex with managed project or user scope, existing-install detection, validation, safe updates and uninstall guidance.
@@ -23,3 +24,6 @@ overrides:
       safeguards through doctor, update/uninstall previews and explicit cleanup
       consent. Copilot team-default settings and native-copy routes are replaced
       by managed project/user scope; never write Copilot settings from this workflow.
+      The reviewed rollback revision adds target verification and separate consent
+      for working-tree deletion. The Codex workflow uses managed uninstall previews
+      and preserves source checkouts and local customizations.
