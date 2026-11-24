@@ -30,6 +30,10 @@ Present `$hve-catalog`, `hve-codex rules match <paths...>`, update and uninstall
 
 For earlier registrations or location settings, show each proposed removal and obtain explicit consent for that file before cleanup. Leave unrelated entries intact. Confirm that the selected Codex route discovers representative skills and agents before removing an older route, then repeat discovery after cleanup in a new client session. If discovery is unverified or consent is declined, retain the old entries and report them. Use managed update/uninstall previews for owned files; never delete a clone, settings file or tracking directory as an automatic recovery step.
 
+## Rollback
+
+Verify the scope and target against the recorded installation. Preview managed uninstall with `hve-codex uninstall --dry-run` for that scope and target, show the proposed changes, and obtain explicit approval before applying them. Preserve source checkouts and local customizations. For separately requested destructive cleanup, verify the exact target, inspect it for uncommitted work, explain what would be lost, and obtain separate authorization before deletion.
+
 ## Phase 7: Agent Customization
 
 Offer optional local agent/rule customization. The managed installer currently supports the complete distribution only; upstream selective component installation has no automatic Codex equivalent. If the user needs only selected components, explain that limitation and agree on a separate, explicit customization scope rather than claiming a partial managed install. Explain owned-file update conflicts and backups; do not edit managed content without the user's requested change. Document customized roles and limitations. On rerun use doctor/update previews rather than starting an unrelated installation. Report the selected scope, installed components, performed validation and all remaining blockers.
